@@ -122,7 +122,11 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
             return;
         }
 
-        ComponentsResults = PcaCalculator.GetComponents(ionData, gridData, Properties.Components);
+        var compResults = PcaCalculator.GetComponents(ionData, gridData, Properties.Components);
+
+        var phaseIDResults = PcaCalculator.GetPhases(ionData, compResults);
+
+        ComponentsResults = compResults;
 
         UpdateOptionsBounds();
 
@@ -266,6 +270,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     }
 
     // Applies filter to the custom analysis: returns the ions in voxels for which the score of the selected component exceeds the specified threshold value
+    // Olof Note -- this is where to change logic for viewing results -- redirect the algorithm here to look at the new 'identified phase' structure
     protected override async IAsyncEnumerable<ReadOnlyMemory<ulong>> GetIndicesDelegateAsync(IIonData ionData, IProgress<double>? progress, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         DataStateIsError = false;

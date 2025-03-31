@@ -12,7 +12,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup Label="Direct Output" Condition="'$(Configuration)' == 'Debug'">
-		<OutputPath>$(LOCALAPPDATA)\CAMECA\AP Suite\Extensions\$(AssemblyName)</OutputPath>
+		<OutputPath>C:\Users\olof\AppData\Local\CAMECA\AP Suite\Extensions\$(AssemblyName)</OutputPath>
 		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 		<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
 	</PropertyGroup>

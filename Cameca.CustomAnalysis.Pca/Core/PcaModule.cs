@@ -2,6 +2,7 @@
 using Cameca.CustomAnalysis.Utilities;
 using Prism.Ioc;
 using Prism.Modularity;
+using System.Diagnostics;
 
 namespace Cameca.CustomAnalysis.Pca;
 
@@ -12,7 +13,7 @@ public class PcaModule : IModule
 {
     public void RegisterTypes(IContainerRegistry containerRegistry)
     {
-        containerRegistry.AddCustomAnalysisUtilities(options => options.UseStandardBaseClasses = true);
+          containerRegistry.AddCustomAnalysisUtilities(options => options.UseStandardBaseClasses = true);
 
         containerRegistry.Register<object, PrincipalComponentAnalysis>(PrincipalComponentAnalysis.UniqueId);
         containerRegistry.RegisterInstance(PrincipalComponentAnalysis.DisplayInfo, PrincipalComponentAnalysis.UniqueId);
@@ -22,6 +23,14 @@ public class PcaModule : IModule
 
     public void OnInitialized(IContainerProvider containerProvider)
     {
+        // begin debug code
+        var isRegistered = containerProvider.IsRegistered<IExtensionRegistry>();
+        if (!isRegistered)
+        {
+            Debug.WriteLine("nope");
+            return;
+        }
+        // end debug code
         var extensionRegistry = containerProvider.Resolve<IExtensionRegistry>();
 
         extensionRegistry.RegisterAnalysisView<PcaView, PcaViewModel>(AnalysisViewLocation.Default);

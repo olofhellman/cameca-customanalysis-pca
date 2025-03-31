@@ -1,4 +1,6 @@
 ﻿using Cameca.CustomAnalysis.Interface;
+using System;
+using System.Linq;
 using System.Collections.Generic;
 
 namespace Cameca.CustomAnalysis.Pca;
@@ -18,4 +20,40 @@ internal sealed class ComponentsResults
         Components = components;
     }
 
+}
+
+internal sealed class PhaseIdResults
+{
+    Dictionary<int, int> identifiedPhase;
+
+    public PhaseIdResults(int[] voxelIndices, int maxIndex)
+    {
+        // not-yet-identified voxels are identified as 0
+        for (int i = 0; i < voxelIndices.Length; ++i)
+        {
+            identifiedPhase[voxelIndices[i]] = 0;
+        }
+    }
+
+    public void IdentifyVoxelAs(int voxelId, int phase)
+    {
+        identifiedPhase[voxelId] = phase;
+    }
+
+    public int? PhaseForVoxel(int voxelId)
+    {
+        return identifiedPhase[voxelId];
+    }
+
+    public List<int> UnidentifiedVoxels()
+    {
+        var unidentifiedIndices = new List<int>();
+        foreach ( KeyValuePair<int, int> voxel in identifiedPhase )
+        {
+            if (voxel.Value == 0) {
+                unidentifiedIndices.Add(voxel.Key);
+            }
+        }
+        return unidentifiedIndices;
+    }
 }
