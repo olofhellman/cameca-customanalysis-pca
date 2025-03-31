@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Cameca.CustomAnalysis.Pca;
 
-internal sealed class ComponentsResults
+public sealed class ComponentsResults
 {
     public IGrid3DData Grid3DData { get; }
 
@@ -28,6 +28,7 @@ internal sealed class PhaseIdResults
 
     public PhaseIdResults(int[] voxelIndices, int maxIndex)
     {
+        identifiedPhase = new Dictionary<int, int>();
         // not-yet-identified voxels are identified as 0
         for (int i = 0; i < voxelIndices.Length; ++i)
         {

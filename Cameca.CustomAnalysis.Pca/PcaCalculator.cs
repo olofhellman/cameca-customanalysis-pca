@@ -1,6 +1,8 @@
 ﻿using Cameca.CustomAnalysis.Interface;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace Cameca.CustomAnalysis.Pca;
@@ -26,34 +28,53 @@ internal static class PcaCalculator
         var localBuffer = Enumerable.Range(0, nFeatures)
             .Select(ionIndex => gridData.GetDataForIon(ionIndex).ToArray())
             .ToArray();
-
         var nonEmptyVoxels = new List<int>();
-        for (int voxelIndex = 0; voxelIndex < nAllVoxels; voxelIndex++)
-        {
-            for (int ionIndex = 0; ionIndex < nFeatures; ionIndex++)
+
+        // string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        // string outputFilename = System.IO.Path.Combine(docPath, "FilledVoxels.surf");
+ 
+        // using (StreamWriter outputFile = new StreamWriter(outputFilename))
+        // {
+            // outputFile.WriteLine("surf file");
+            // outputFile.WriteLine("triangle vertices:");
+
+ 
+            for (int voxelIndex = 0; voxelIndex < nAllVoxels; voxelIndex++)
             {
-                if (localBuffer[ionIndex][voxelIndex] != 0f)
+                for (int ionIndex = 0; ionIndex < nFeatures; ionIndex++)
                 {
-                    nonEmptyVoxels.Add(voxelIndex);
-                    break;
+                    if (localBuffer[ionIndex][voxelIndex] != 0f)
+                    {
+                        nonEmptyVoxels.Add(voxelIndex);
+                       //  outputFile.Write("x");
+                        break;
+                    }
+                    
                 }
+
+                // outputFile.Write("."); // need to add logic to not write if we wrote an x
             }
-        }
+
+            // outputFile.Close();
+        // }
+
+
         int nVoxels = nonEmptyVoxels.Count;
 
-        var dataBuffer = new float[nFeatures * nVoxels];
-        for (int featureIndex = 0; featureIndex < nFeatures; featureIndex++)
-        {
-            int x = 0;
-            foreach (int voxelIndex in nonEmptyVoxels)
+            var dataBuffer = new float[nFeatures * nVoxels];
+            for (int featureIndex = 0; featureIndex < nFeatures; featureIndex++)
             {
-                dataBuffer[(featureIndex * nVoxels) + x++] = localBuffer[featureIndex][voxelIndex];
+                int x = 0;
+                foreach (int voxelIndex in nonEmptyVoxels)
+                {
+                    dataBuffer[(featureIndex * nVoxels) + x++] = localBuffer[featureIndex][voxelIndex];
+                }
             }
-        }
 
-        int nevals = nFeatures;  // Input?
+            int nevals = nFeatures;  // Input?
 
-        float[] evals = new float[nevals];
+            float[] evals = new float[nevals];
+   
 
         PcaLib.doEigen(nVoxels, nFeatures, dataBuffer, nevals, evals);
 
@@ -80,13 +101,39 @@ internal static class PcaCalculator
     // if step 1 can't find a minimum, algorithm is finished
     public static PhaseIdResults GetPhasesStrategyB(IIonData ionData, ComponentsResults compResults)
     {
+        int nAllVoxels = compResults.Grid3DData.NumVoxels[0] * compResults.Grid3DData.NumVoxels[1] * compResults.Grid3DData.NumVoxels[2];
+
+        PhaseIdResults phaseIdResults = new PhaseIdResults(compResults.VoxelIndices, nAllVoxels);
         PcaScoresGrid scoresGrid = new PcaScoresGrid(compResults);
+        ErosionFinder erosionFinder = new ErosionFinder(compResults.VoxelIndices, compResults.Grid3DData);
+        var insideVoxels = erosionFinder.FindInnerVoxels();
+
+        string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string outputFilename = System.IO.Path.Combine(docPath, "CoreVoxels.surf");
+        using (StreamWriter outputFile = new StreamWriter(outputFilename))
+        {
+            outputFile.WriteLine("voxels file");
+            foreach (int voxelIndex in insideVoxels)
+            {
+                int zDelta = compResults.Grid3DData.NumVoxels[0] * compResults.Grid3DData.NumVoxels[1];
+                int z = (int)(voxelIndex / zDelta);
+                int rem = voxelIndex % zDelta;
+                int yDelta = compResults.Grid3DData.NumVoxels[0];
+                int y = (int)(rem / yDelta);
+                int x = rem % yDelta;
+                outputFile.WriteLine(x + " " + y + " " + z);
+            }
+            outputFile.Close();
+        }
+
+        return phaseIdResults;
     }
 
-    float[] scoreForVoxel()
-    {
-         
-    }
+    //static float[] scoreForVoxel()
+   //{
+    //    return [0.0];
+   //}
+
     // strategy:
     // Prep:  have list of voxel candidates containing all voxels
     // 1) use cluster analysis on the componentsResults to find a likely seed value for a vector in scores
@@ -104,12 +151,12 @@ internal static class PcaCalculator
         int nComponents = compResults.Components.Count;
 
         var clusterFinder = new ClusterFinder(compResults);
-        int clusterSamples = 25
-        var clusterVector = clusterFinder.FindClusterVector(clusterSamples);
-        while (clusterVector != NULL)
-        {
-            clusterVector = clusterFinder.FindClusterVector(clusterSamples);
-        }
+        int clusterSamples = 25;
+       // var clusterVector = clusterFinder.FindClusterVector(clusterSamples);
+       // while (clusterVector != NULL)
+       // {
+       //     clusterVector = clusterFinder.FindClusterVector(clusterSamples);
+       // }
 
 
         return phaseIdResults;
@@ -186,53 +233,343 @@ internal static class PcaCalculator
     }
 }
 
-internal class ErosionFinder
+public class ErosionFinder
 {
-    List<int> indices = new List<int>();
+    List<int> innerVoxels = new List<int>();
     List<int> edgeVoxels = new List<int>();
     int dimA;
     int dimB;
     int dimC; 
     int nVoxels;
 
-    ErosionFinder(List<int> startingVoxels, IGrid3DData gridData)
+    public ErosionFinder(int[] startingVoxels, IGrid3DData gridData)
     {
-        indices = new List<int>(startingVoxels);
+        var startingIndices = new List<int>(startingVoxels);
         dimA = gridData.NumVoxels[0];
         dimB = gridData.NumVoxels[1];
         dimC = gridData.NumVoxels[2];
 
         nVoxels = dimA * dimB * dimC;
-        indices.Add(dimA);
-        edgeVoxels = findFirstEdges(indices);
-        edgeVoxels.ForEach(indices.Remove);
+        (innerVoxels, edgeVoxels) = FindFirstEdges(startingIndices);
+    }
+    public List<int> FindInnerVoxels()
+    {
+        List<int> shell = edgeVoxels;
+        List<int> core = innerVoxels;
+        (shell, core) = FindShell(innerVoxels, edgeVoxels);
+        while ( core.Count > 0 )
+        {
+            (shell, core) = FindShell(core, shell);
+        }
+
+        // now the indices in shell are the innermost core of the first erosion algorithm
+        // we can winnow further by removing voxels with fewer neighbors
+        shell = WinnowShell(shell);
+
+        return (shell);
     }
 
-    List<int> findFirstEdges(List<int> voxels)  
+    List<int> keysWithLowestValue(Dictionary<int, int> dict)
+    {
+        var keys = new List<int>();
+        if (dict.Count < 2)
+        {
+            keys.Add(dict.Keys);
+        }
+        else
+        {
+            var list = sortByValue(dict);
+            var firstVal = list[0].Value;
+            int listLen = list.Length;
+            int i = 1;
+            keys.Add(list[0].Key);
+            while ((i< listLen) && (list[i].Value == firstVal))
+            {
+                keys.Add(list[i].Key);
+                ++i;
+            }
+        }
+        return keys;
+    }
+
+    int? keyWithHighestValue(Dictionary<int, int> dict)
+    {
+        if (dict.Count < 2)
+        {
+            if (dict.Count == 1)
+            {
+                return dict.First().Key
+            }
+            else
+            {
+                return null;
+            }
+        }
+        else
+        {
+            var list = sortByValue(dict);
+            var last = list[list.Count - 1];
+            var second = list[list.Count - 2];
+            if (last.Value > second.Value)
+            {
+                return last.Key;
+            }
+            else
+            {
+                return null;
+            }
+        }
+    }
+
+    List<KeyValuePair<int, int>> sortByValue(Dictionary<int, int> dict)
+    {
+        List<KeyValuePair<int, int>> myList = dict.ToList();
+
+        myList.Sort(
+            delegate (KeyValuePair<int, int> pair1,
+            KeyValuePair<int, int> pair2)
+            {
+                return pair1.Value.CompareTo(pair2.Value);
+            }
+        );
+
+        return myList;
+    }
+
+    List<int> WinnowShell(List<int> voxelsIn)
+    {
+        // for each voxel, rank according to how many neighbors it has,
+        // secondary rank according to sum of how many neighbors each neighbor has
+        // remove lowest tier and retry until a single voxel has highest rank, or until all voxels ae lowest rank
+        // if all voxels lowest rank, choose the one closest to origin
+        Dictionary<int, int> ranking = new Dictionary<int, int>();
+        List<int> neighborOffsets = new List<int>();
+        int zOffset = dimA * dimB;
+        int yOffset = dimA;
+        neighborOffsets.Add(-zOffset);
+        neighborOffsets.Add(-yOffset);
+        neighborOffsets.Add(-1);
+        neighborOffsets.Add(1);
+        neighborOffsets.Add(yOffset);
+        neighborOffsets.Add(zOffset);
+        List<int> edgyOffsets = new List<int>();
+        edgyOffsets.Add(-zOffset - yOffset);
+        edgyOffsets.Add(-zOffset - 1);
+        edgyOffsets.Add(-zOffset + yOffset);
+        edgyOffsets.Add(-zOffset + 1);
+        edgyOffsets.Add(-yOffset - 1);
+        edgyOffsets.Add(-yOffset + 1);
+        edgyOffsets.Add(yOffset - 1);
+        edgyOffsets.Add(yOffset + 1);
+        edgyOffsets.Add(zOffset - yOffset);
+        edgyOffsets.Add(zOffset - 1);
+        edgyOffsets.Add(zOffset + yOffset);
+        edgyOffsets.Add(zOffset + 1);
+
+        foreach (int v in voxelsIn)
+        {
+            ranking[v] = 0;
+        }
+
+        int previousNumberOfVoxels;
+        do
+        {
+            previousNumberOfVoxels = ranking.Count;
+            foreach (int v in voxelsIn)
+            {
+                int vScore = 0;
+                foreach (int offset in neighborOffsets)
+                {
+                    if (voxelsIn.Contains(v + offset))
+                    {
+                        vScore += 100;
+                    }
+                }
+                foreach (int offset in edgyOffsets)
+                {
+                    if (voxelsIn.Contains(v + offset))
+                    {
+                        vScore += 1;
+                    }
+                }
+                ranking[v] = ranking[v] + vScore;
+            }
+
+            // see if single highest value voxel exists
+            var chosen = keyWithHighestValue(ranking);
+            if (chosen.HasValue)
+            {
+                return chosen.Value;
+            }
+
+            // prune keys with lowest Value
+            var lowestRankers = keysWithLowestValue(ranking);
+            foreach (int v in lowestRankers) { }
+            ranking[v] = null;
+
+        } while (ranking.Count < previousNumberOfVoxels);
+
+        // if we get here, winnowing the voxels has not resulted in a single winner
+        // the results are either symmetric (a 2x2x2 cube) or disjoint
+        // (two single voxels which are not neighbors)
+        // in this case, pick the one with the lower index
+
+        return ranking.Keys;
+    }
+
+    (List<int>, List<int>) FindShell(List<int> voxelsIn, List<int> edgeIn)
+    {
+        List<int> core = new List<int>();
+        List<int> shell = new List<int>();
+    
+        foreach (int v in voxelsIn)
+        {
+            int zOffset = dimA * dimB;
+            int yOffset = dimA;
+            List<int> neighborOffsets = new List<int>();
+            neighborOffsets.Add(-zOffset);
+            neighborOffsets.Add(-yOffset);
+            neighborOffsets.Add(-1);
+            neighborOffsets.Add(1);
+            neighborOffsets.Add(yOffset);
+            neighborOffsets.Add(zOffset);
+
+            bool foundEdge = false;
+            foreach (int offset in neighborOffsets)
+            {
+                if (edgeIn.Contains(v + offset))
+                {
+                    foundEdge = true;
+                    break;
+                }
+            }
+
+            if (foundEdge)
+            {
+                shell.Add(v);
+            }
+            else
+            {
+                core.Add(v);
+            }
+
+        }
+        return (shell, core);
+    }
+
+    (List<int>, List<int>) FindFirstEdges(List<int> voxels)
     {
         // firstEdges are all the voxels in voxels adjacent to a voxel not in voxels
         // plus all voxels on the box edges
         // first, make a list of voxelIndices not in voxels
-        List<int> notInVoxels = new List<int>();
-        List<int> firstEdge = new List<int>();
+        List<int> notInVoxels = new List<int>(); 
+        List<int> innerVoxels = new List<int>();
+        List<int> edgeVoxels = new List<int>();
         for (int i = 0; i < nVoxels; ++i)
         {
-            if (!indices.Contains(i))
+            if (!voxels.Contains(i))
             {
                 notInVoxels.Add(i);
             }
         }
 
+        List<int> cellEdges = CellEdges(dimA, dimB, dimC);
+        foreach (int v in voxels)
+        {
+            int zOffset = dimA * dimB;
+            int yOffset = dimA;
+            List<int> neighborOffsets = new List<int>();
+            neighborOffsets.Add(-zOffset);
+            neighborOffsets.Add(-yOffset);
+            neighborOffsets.Add(-1);
+            neighborOffsets.Add(1);
+            neighborOffsets.Add(yOffset);
+            neighborOffsets.Add(zOffset);
+
+            if (cellEdges.Contains(v))
+            {
+                edgeVoxels.Add(v);
+            } 
+            else
+            {
+                // check if any of its neighbors are in notInVoxels
+                // we know that v is not at the edge, so neighbor index calculation is easy
+                bool foundEdge = false;
+                foreach (int offset in neighborOffsets) {
+                    if (notInVoxels.Contains(v+ offset))
+                    {
+                        foundEdge = true;
+                        break;
+                    }
+                }
+
+                if (foundEdge) {
+                    edgeVoxels.Add(v);
+                }
+                else
+                {
+                    innerVoxels.Add(v);
+                }
+                // int[] neighbors = [v - zOffset, v - yOffset, v - 1, v + 1, v + yOffset, v + zOffset];
+
+            }
+        }
+        return (innerVoxels, edgeVoxels);
+    }
+
+    // return a List of voxel indices corresponding to all the voxels on the edge of the cell
+    List<int> CellEdges(int nx, int ny, int nz)
+    {
+        // add voxel indices for the top face, i.e. at z = 0
+        List<int> cellEdges = new List<int>();
+        for (int v = 0; v < nx * ny; ++v)
+        {
+            cellEdges.Add(v);
+        }
+        // add voxel indices for corners and edges for each plane of z not at the top or bottom
+
+        for (int z = 1; z <(nz- 1); ++z)
+        {
+            int zOffset = z * (nx * ny);
+            // add row of pixels at the y = 0 edge
+            for (int x = 0; x < nx; ++x)
+            {
+                cellEdges.Add(x + zOffset);
+            }
+
+            // add the two cells at x = 0 and x = nx-1 for each y
+            for (int y = 1; y < (ny - 1); ++y)
+            {
+                cellEdges.Add((y * nx) + zOffset);
+                cellEdges.Add((y * nx) + (nx - 1) + zOffset);
+            }
+
+            int yOffset = (ny - 1) * nx;
+            // add row of pixels at the y = ny - 1 edge
+            for (int x = 0; x < nx; ++x)
+            {
+                cellEdges.Add(x + yOffset + zOffset);
+            }
+        }
+
+        // add voxel indices for the bottom face, i.e. at z = nz - 1
+        int bottomFaceOffset = (nz - 1) * (nx * ny);
+        for (int v = 0; v < nx * ny; ++v)
+        {
+            cellEdges.Add(v + bottomFaceOffset);
+        }
+
+        return cellEdges;
     }
 
 }
 
-internal struct ClusterableVoxel
+public struct ClusterableVoxel
 {
     public int voxelIndex; // the voxelIndex from compResults.VoxelIndices;  (between 0 and nTotalVoxels - 1)
     public int arrayIndex; // the index of this voxel in compResults.VoxelIndices;  (between 0 and compResults.VoxelIndices.Count - 1
     public float[] scoreVector;
-    ClusterableVoxel(int vIndex, int aIndex, float[] vec)
+    public ClusterableVoxel(int vIndex, int aIndex, float[] vec)
     {
         voxelIndex = vIndex;
         arrayIndex = aIndex;
@@ -240,47 +577,71 @@ internal struct ClusterableVoxel
     }
 }
 
-internal struct PcaVoxel
+public struct PcaVoxel
 {
     public int voxelIndex; // the voxelIndex from compResults.VoxelIndices;  (between 0 and nTotalVoxels - 1)
-    ClusterableVoxel(int vIndex, float[] vec)
+    public float[] scoreVector;
+
+    public PcaVoxel(int vIndex, float[] vec)
     {
         voxelIndex = vIndex;
         scoreVector = vec;
     }
 }
 
-internal class PcaScoresGrid
+public class PcaScoresGrid
 {
     Dictionary<int, PcaVoxel> pcaVoxels;
+    int scoreDimensions;
 
-    PcaScoresGrid(ComponentsResults compResults)
-    { 
+
+     //   Components = compResults.Components;
+     //   VoxelIndices = compResults.VoxelIndices;
+     //   Grid3DData = compResults.Grid3DData;
+
+     //   int nIndices = compResults.VoxelIndices.Length;
+        
+
+
+    public PcaScoresGrid(ComponentsResults compResults)
+    {
         pcaVoxels = new Dictionary<int, PcaVoxel>();
-        for (int i = 0; i<nIndices; ++i)
+        scoreDimensions = compResults.Components.Count;
+        int nComponents = compResults.Components.Count;
+
+        int dimA = compResults.Grid3DData.NumVoxels[0];
+        int dimB = compResults.Grid3DData.NumVoxels[1];
+        int dimC = compResults.Grid3DData.NumVoxels[2];
+
+        int nVoxels = dimA * dimB * dimC;
+
+        int nIndices = compResults.VoxelIndices.Length;
+
+        for (int i = 0; i < nIndices; ++i)
         {
-            float[] nthVector = new float[Dimensions];
-            for (int c = 0; c<nComponents; ++c)
+            float[] nthVector = new float[scoreDimensions];
+            for (int c = 0; c < nComponents; ++c)
             {
                 nthVector[c] = compResults.Components[c].Scores[i];
             }
             var pcaVoxel = new PcaVoxel(compResults.VoxelIndices[i], nthVector);
-            pcaVoxels.[VoxelIndices[i]] = pcaVoxel;
-        } 
+            pcaVoxels[compResults.VoxelIndices[i]] = pcaVoxel;
+        }
     }
+}
 
-internal class ClusterFinder
+public class ClusterFinder
 {
 
     List<ClusterableVoxel> clusterableVoxels;
 
     int Dimensions;
 
-    ClusterFinder(ComponentsResults compResults)
+    public ClusterFinder(ComponentsResults compResults)
     {
-        Components = compResults.Components;
-        VoxelIndices = compResults.VoxelIndices;
-        Grid3DData = compResults.Grid3DData;
+        // Components = compResults.Components;
+        // VoxelIndices = compResults.VoxelIndices;
+        // Grid3DData = compResults.Grid3DData;
 
         int nComponents = compResults.Components.Count; 
         int nIndices = compResults.VoxelIndices.Length;
@@ -303,14 +664,15 @@ internal class ClusterFinder
     // where dN is distance to each of the other (N-1) clusterables and E is a distance in vector space deemed "close enough to not matter anymore"
     // E is used to make sure that the cluster algorithm isn't dominated by two voxels at exactly the same vector
     // trick: autocalculate E to be related to the second-nearest distance.
+    /* 
     float[] FindClusterVector(int numSamples)
     {
         List<ClusterableVoxel> samples;
         if (samples > clusterableVoxels.Count)
         {
-            samples = clusterableVoxels
+            samples = clusterableVoxels;
         } else {
-            samples = new List<ClusterableVoxel>()
+            samples = new List<ClusterableVoxel>();
             int stride = clusterableVoxels.Count / samples;
             int strideStart = randomStride / 2;
             for (int i = 0; i < samples;  ++i )
@@ -325,7 +687,7 @@ internal class ClusterFinder
         var scores = new List<float>();
         float nearestDistanceSquared = 1E10;
         float secondNearestDistanceSquared = 2E10;
-        for (int n = 0; n < numSamples - 1; ++n
+        for (int n = 0; n < numSamples - 1; ++n)
         {
             scores.Add(0);
             for (int p = n + 1; p < numSamples; ++p)
@@ -354,6 +716,7 @@ internal class ClusterFinder
         }
 
     }
+    */
 
 
 
