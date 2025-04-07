@@ -15,6 +15,7 @@ using CommunityToolkit.Mvvm.Input;
 using LiveCharts;
 using LiveCharts.Configurations;
 using LiveCharts.Wpf;
+using static Cameca.CustomAnalysis.Interface.IonFormula;
 
 namespace Cameca.CustomAnalysis.Pca;
 
@@ -126,6 +127,8 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
 
         var phaseIDResults = PcaCalculator.GetPhases(ionData, compResults);
 
+        compResults.PhaseIDResults = phaseIDResults;
+
         ComponentsResults = compResults;
 
         UpdateOptionsBounds();
@@ -232,11 +235,27 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     }
 
     // Updates the components 3D plots when the component data (derived from selected number of components) changes
+    float[] GetPhaseIdScoresForVoxelIndices(PhaseIdResults phaseIdResults, int compIndex, int[] voxelIndices)
+    {
+        int numIndices = voxelIndices.Length;
+        float[] scores = new float[numIndices];
+        for (int i = 0; i < numIndices; ++i)
+        {
+            int voxelIndex = voxelIndices[i];
+            scores[i] = phaseIdResults.PhaseForVoxel(voxelIndex) == compIndex ? 1.0f : 0.0f ;
+        }
+        return scores;
+    }
+
+    // Updates the components 3D plots when the component data (derived from selected number of components) changes
     partial void OnComponentsResultsChanged(ComponentsResults? value)
     {
         ComponentRenderData = Array.Empty<IRenderData>();
 
-        if (ComponentsResults is not { Grid3DData: { } gridData, Components: { } components, VoxelIndices: { } voxelIndices }
+        if (ComponentsResults is not { Grid3DData: { } gridData, 
+                                       Components: { } components,  
+                                       PhaseIDResults: { } phaseIdResults, 
+                                       VoxelIndices: { } voxelIndices }
          || Resources.GetValidIonData() is not { } ionData)
         {
             return;
@@ -249,7 +268,11 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         for (int compIndex = 0; compIndex < numComponents; compIndex++)
         {
             var scores = components[compIndex].Scores;
-            var positionsWithValues = PositionScores.GetScoredPositions(gridData, voxelIndices, scores);
+            var phaseIdScores = GetPhaseIdScoresForVoxelIndices(phaseIdResults, compIndex, voxelIndices);
+
+            // data fed into GetScoredPositions is an array of voxelIndices for which a dot should be generated,
+            // and an array of scores -- scores[n] is the score for the voxel at voxelIndex[n]
+            var positionsWithValues = PositionScores.GetScoredPositions(gridData, voxelIndices, phaseIdScores);
 
             var valuePoints = Resources.ChartObjects.CreateValuePoints();
             valuePoints.Name = $"Component {compIndex}";
@@ -271,7 +294,64 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
 
     // Applies filter to the custom analysis: returns the ions in voxels for which the score of the selected component exceeds the specified threshold value
     // Olof Note -- this is where to change logic for viewing results -- redirect the algorithm here to look at the new 'identified phase' structure
+  
     protected override async IAsyncEnumerable<ReadOnlyMemory<ulong>> GetIndicesDelegateAsync(IIonData ionData, IProgress<double>? progress, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        DataStateIsError = false;
+        if (ComponentsResults is null)
+        {
+            await UpdateComponents(cancellationToken);
+        }
+
+        // Extract necessary data out of ComponentsResults using some pattern matching for null checks and variable assignment
+        if (ComponentsResults is not { Grid3DData: { } gridData, VoxelIndices: { } nonEmptyVoxels }
+            || ComponentsResults.Components[Properties.ComponentIndex] is not { Scores: { } scores })
+        {
+            DataStateIsError = true;
+            yield break;
+        }
+        var phaseIds = ComponentsResults.PhaseIDResults;
+        int componentOfInterest = Properties.ComponentIndex;
+        var minVector = gridData.GetMinVector();
+        var voxelSize = gridData.GetVoxelSizeDimensions();
+        int xBinStride = gridData.NumVoxels[0];
+        int yBinStride = gridData.NumVoxels[1];
+        var binner = new PositionToVoxels(minVector, voxelSize, xBinStride, yBinStride);
+
+        // Create a map of voxel index to the associated score
+        var scoredVoxels = nonEmptyVoxels
+            .Zip(scores)
+            .ToDictionary(x => x.First, x => x.Second);
+
+        // Build buffers of filtered indices to return
+        // Iterating through each point (to determine inclusion) is a bit of a complex chunked iterator code to support >Int32.MaxValue number of ions in a data set
+        ulong index = 0ul;
+        float threshold = Properties.Isovalue;
+        foreach (var chunk in ionData.CreateSectionDataEnumerable(IonDataSectionName.Position))
+        {
+            int bufferIndex = 0;
+            using var buffer = MemoryOwner<ulong>.Allocate(chunk.Length);
+            var positions = chunk.ReadSectionData<Vector3>(IonDataSectionName.Position);
+            for (int chunkIndex = 0; chunkIndex < chunk.Length; chunkIndex++)
+            {
+                var bin = binner.ToVoxel(positions.Span[chunkIndex]);
+
+                // Properties.ComponentIndex is the selectedComponent
+                if (phaseIds.PhaseForVoxel(bin) == componentOfInterest) 
+                // if (scoredVoxels.TryGetValue(bin, out float score) && score >= threshold)
+                {
+                    buffer.Span[bufferIndex++] = index;
+                }
+                index += 1ul;
+            }
+            yield return buffer.Slice(0, bufferIndex).Memory;
+        }
+
+        DataStateIsValid = true;
+    }
+
+    /*
+    protected override async IAsyncEnumerable<ReadOnlyMemory<ulong>> GetIndicesDelegateAsyncOld(IIonData ionData, IProgress<double>? progress, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         DataStateIsError = false;
         if (ComponentsResults is null)
@@ -321,6 +401,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
 
         DataStateIsValid = true;
     }
+    */
 
     // On Properties panel changes, some data must be invalidated to be recomputed with new values. Invalidations depend on the properties changed
     protected override void OnPropertiesChanged(PropertyChangedEventArgs e)
