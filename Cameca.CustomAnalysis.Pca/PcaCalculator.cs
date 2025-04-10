@@ -122,60 +122,11 @@ internal static class PcaCalculator
         PcaScoresGridProducer producer = new PcaScoresGridProducer(compResults);
 
         PcaScoresGrid scoresGrid = producer.ScoresGrid();
-        return scoresGrid.GetPhasesStrategyB();
+        return scoresGrid.GetPhasesStrategyC();
     }
 
-    // strategy:
-    // Prep:  have list of voxel candidates containing all voxels
-    // Prep: define a minimization function that can find a 'least slope' voxel for starting a seed fill
-    //       'least slope' a minimum of the dS/dP (Slope and Position)
-    // 0) use erosion algorithm to find likely starting voxel for step 1)
-    // 1) use 'least slope' on the componentsResults to find a likely seed value for a vector in scores. If no minimum found, remove traversed voxels from candidates list and return to 0)
-    // 2) use seed fill to find cluster of neighboring voxels - label as phase N -- remove labelled voxels (and neighbors?) from candidates list
-    // 3) find voxels near least slope value not identified in 2)
-    // 4) use seed fill on voxels identified in 3), label voxels so identified as "Phase N" -- remove labelled voxels (and neighbors?) from candidates list
-    // 5) increment N and return to step 1
-    // return to step 0 using new candidates list
-    // if step 1 can't find a minimum, algorithm is finished
-    /*
-    public static PhaseIdResults GetPhasesStrategyB(IIonData ionData, ComponentsResults compResults)
-    {
- 
-        int nAllVoxels = compResults.Grid3DData.NumVoxels[0] * compResults.Grid3DData.NumVoxels[1] * compResults.Grid3DData.NumVoxels[2];
- 
-        PhaseIdResults phaseIdResults = new PhaseIdResults(compResults.VoxelIndices, nAllVoxels);
-        var gridProducer = new PcaScoresGridProducer(compResults);
-        PcaScoresGrid scoresGrid = gridProducer.ScoresGrid();
-        List<int> voxelIndices = new List<int>(compResults.VoxelIndices);
-        int[] gridDimensions = compResults.Grid3DData.NumVoxels;
-        ErosionFinder erosionFinder = new ErosionFinder(voxelIndices, gridDimensions);
-        var insideVoxels = erosionFinder.FindInnerVoxels();
-
-        string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string outputFilename = System.IO.Path.Combine(docPath, "CoreVoxels.surf");
-        using (StreamWriter outputFile = new StreamWriter(outputFilename))
-        {
-            outputFile.WriteLine("voxels file");
-            foreach (int voxelIndex in insideVoxels)
-            {
-                int zDelta = compResults.Grid3DData.NumVoxels[0] * compResults.Grid3DData.NumVoxels[1];
-                int z = (int)(voxelIndex / zDelta);
-                int rem = voxelIndex % zDelta;
-                int yDelta = compResults.Grid3DData.NumVoxels[0];
-                int y = (int)(rem / yDelta);
-                int x = rem % yDelta;
-                outputFile.WriteLine(x + " " + y + " " + z);
-            }
-            outputFile.Close();
-        }
-
-        return phaseIdResults;
-    }
-    */
-    //static float[] scoreForVoxel()
-   //{
-    //    return [0.0];
-   //}
+     
+   
 
     public static ComponentsResults GetComponents(IIonData ionData, IGrid3DData gridData, int nComponents)
     {
