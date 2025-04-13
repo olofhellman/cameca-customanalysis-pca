@@ -1,12 +1,10 @@
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System;
 using PcaExtensionMethods;
-using static System.Formats.Asn1.AsnWriter;
-using System.Windows.Controls;
 
-public struct PixelSuggestion: IComparable<PixelSuggestion> 
+
+public struct PixelSuggestion : IComparable<PixelSuggestion>
 {
     public float score;
     public PixelID pixelId;
@@ -23,6 +21,12 @@ public struct PixelSuggestion: IComparable<PixelSuggestion>
     {
         return other.score < score ? -1 : other.score > score ? 1 : 0;
     }
+
+    public string DebugStr()
+    {
+        return "PixelID: " + pixelId.DebugStr() + ", score: " + score + ", peak: " + peakId.DebugStr();
+
+    }
 }
 
 
@@ -30,7 +34,8 @@ public class TwoDPeak
 {
     public PeakID peakId;
     PixelID peakMaxPixelId; // this is also the id for this object in container's dictionary
-    List<PixelID> pixelIds;
+    List<PixelID> borderPixelIds;
+    List<PixelID> inPeakPixelIds;
     List<PixelSuggestion> nextCandidates;
     List<PixelSuggestion> topCandidates; // this list is recycled as the return vehicle for getting next suggestions
     DensityPlane referenceGrid;
@@ -42,7 +47,8 @@ public class TwoDPeak
         this.partitionFinder = partitionFinder;
         this.peakMaxPixelId = peakMaxPixelId;
         this.peakId = new PeakID(peakMaxPixelId);
-        this.pixelIds = new List<PixelID>();
+        this.inPeakPixelIds = new List<PixelID>();
+        this.borderPixelIds = new List<PixelID>();
         this.nextCandidates = new List<PixelSuggestion>();
         this.topCandidates = new List<PixelSuggestion>();
         this.referenceGrid = grid;
@@ -55,7 +61,7 @@ public class TwoDPeak
 
     public List<PixelID> PixelList()
     {
-        return pixelIds;
+        return inPeakPixelIds;
     }
 
     public bool HasFoundIncrease()
@@ -72,26 +78,64 @@ public class TwoDPeak
     // add adjacent pixels to list
     public void SuggestionAccepted(PixelSuggestion suggestion)
     {
+        Debug.WriteLine("SuggestionAccepted in peak " + this.peakId.DebugStr() + " : " + suggestion.DebugStr());
         removeFromCandidates(suggestion);
-        pixelIds.Add(suggestion.pixelId);
+        bool isBorder = false;
+        
         List<PixelID> newPossibilities = referenceGrid.PixelIdsNeighboring(suggestion.pixelId);
         List<PixelID> availableIds = partitionFinder.filterForAvailableIds(newPossibilities);
         foreach(PixelID availableId in availableIds)
         {
-            float neighborScore = referenceGrid.valueAtPixel(availableId);
+            // this might already be in our list of candidates -- if it is, skip
 
-            if (neighborScore > suggestion.score)
+            if (!IsCandidate(availableId))
             {
-                // neighbor has higher score -- shouldn't add to current peak
-                foundIncreaseIds.Add(availableId);
-            }
-            else
-            {
-                PixelSuggestion newSuggestion = new PixelSuggestion(peakId, availableId, neighborScore);
-                this.InsertCandidate(newSuggestion);
+                float neighborScore = referenceGrid.valueAtPixel(availableId);
+
+                if (neighborScore > suggestion.score)
+                {
+                    // neighbor has higher score -- shouldn't add to current peak
+                    // the currently 'accepted suggestion' is actually a pixel between peaks.
+                    isBorder = true;
+                    Debug.WriteLine("Found increase at pixel " + availableId.DebugStr() + " neighborScore: " + neighborScore + " suggestionScore: " + suggestion.score);
+                    foundIncreaseIds.Add(availableId);
+                }
+                else
+                {
+                    PixelSuggestion newSuggestion = new PixelSuggestion(peakId, availableId, neighborScore);
+                    this.InsertCandidate(newSuggestion);
+                }
             }
         }
+        if (isBorder)
+        {
+            borderPixelIds.Add(suggestion.pixelId);
+        }
+        else
+        {
+            inPeakPixelIds.Add(suggestion.pixelId);
+        }
     }
+
+    public bool IsCandidate(PixelID pixelId)
+    {
+        foreach ( PixelSuggestion candidate in  nextCandidates)
+        {
+            if (candidate.pixelId.pixelId == pixelId.pixelId)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public List<PixelID> ClearFoundIncreases()
+    {
+        List<PixelID> returnList =  foundIncreaseIds;
+        foundIncreaseIds = new List<PixelID>();
+        return returnList;
+    }
+
 
     // this peak maintains a list of the candidate neighbor pixels 
     // which could be added to the peak during the accumulation

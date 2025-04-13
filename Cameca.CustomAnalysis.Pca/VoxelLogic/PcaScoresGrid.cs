@@ -423,7 +423,7 @@ public class PcaScoresGrid
         // now, make twoD grids using all pairs of dimensions
         for (int i = 0; i < (gridDims - 1); ++i)
         {
-            for (int j = i; j < gridDims; ++j)
+            for (int j = i + 1; j < gridDims; ++j)
             {
                 int gridId = 10 * i + j;
                 var twoDGrid = CalculateTwoDDensity(voxelIndices, i, j, binSeparation);
@@ -433,6 +433,9 @@ public class PcaScoresGrid
                 partitions[gridId] = partitionedIndices;
             }
         }
+
+
+
 
         // now turn the partitions array into the data needed by phaseIDResults
         // phaseIDResults has a method  IdentifyVoxelAs(int voxelIds, int phase)
@@ -449,6 +452,42 @@ public class PcaScoresGrid
         {
             int firstGridId = 1;
             DensityPlane grid = twoDGrids[firstGridId];
+            List<List<PixelID>> firstGridPartitions = partitions[firstGridId];
+
+            // for debugging, dump the partitions:
+            string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            string outputFilename = System.IO.Path.Combine(docPath, "Partitions.txt");
+
+            using (StreamWriter outputFile = new StreamWriter(outputFilename))
+            {
+                outputFile.WriteLine("partitions file");
+                outputFile.WriteLine("grid Info:");
+
+                TwoDGridCoord gridMinCoord;
+                TwoDGridCoord gridMaxCoord;
+                (gridMinCoord, gridMaxCoord) = grid.MinMaxGridCoords();
+                outputFile.WriteLine("minx: " + gridMinCoord.x);
+                outputFile.WriteLine("miny: " + gridMinCoord.y);
+                outputFile.WriteLine("maxx: " + gridMaxCoord.x);
+                outputFile.WriteLine("maxy: " + gridMaxCoord.y);
+                int peakIndex = 0;
+                outputFile.WriteLine("");
+                foreach (List<PixelID> pixelIdList in firstGridPartitions)
+                {
+                    outputFile.WriteLine("partition: " + peakIndex);
+                    outputFile.WriteLine("pixelCoords: " + peakIndex);
+                    outputFile.Write("{");
+                    foreach (PixelID pixelId in pixelIdList)
+                    {
+                        int x;
+                        int y;
+                        (x, y) = pixelId.xyCoords();
+                        outputFile.Write("{" + x + "," + y + "}");
+                    }
+                    outputFile.Write("}\n");
+                }
+            }
+
             Dictionary<PixelID, List<int>> voxelLists = new Dictionary<PixelID, List<int>>();
             foreach (int voxelId in voxelIndices)
             {
@@ -469,9 +508,9 @@ public class PcaScoresGrid
 
             // now, each voxelIndex is a member of one of the lists in voxelLists
             // go through each list in voxelLists and see if its pixel is designated in a particular partiion
-            List<List<PixelID>> firstGridPartitions = partitions[firstGridId];
-
-            int listN = 0;
+           
+             
+            int listN = 1;
             foreach (List<PixelID> pixelIdList in firstGridPartitions)
             {
                 // the pixelIdList contains a list of pixelIds identified as being part of the Nth partition
@@ -483,9 +522,24 @@ public class PcaScoresGrid
                     {
                         phaseIdResults.IdentifyVoxelAs(voxelId, listN);
                     }
+                    // remove that entry from voxelLists
+                    voxelLists.Remove(pixelID);
                 }
 
                 ++listN;
+            }
+
+            // now, all the remaining entries in voxelLists are unassigned :  
+            // assign these to component 0
+            List<PixelID> unassignedPixels = voxelLists.Keys.ToList();
+            foreach (PixelID pixelID in unassignedPixels)
+            {
+                // Lookup for all the voxels bucketed under this pixelId
+                List<int> voxelIds = voxelLists[pixelID];
+                foreach (int voxelId in voxelIds)
+                {
+                    phaseIdResults.IdentifyVoxelAs(voxelId, 0);
+                }
             }
         }
 

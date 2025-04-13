@@ -31,6 +31,13 @@ public struct PixelID : IComparable<PixelID>
     {
         return other.pixelId > pixelId ? -1 : other.pixelId < pixelId ? 1 : 0;
     }
+    public string DebugStr()
+    {
+        int x;
+        int y;
+        (x, y) = this.xyCoords();
+        return pixelId.ToString() + ":{" + x + "," + y + "}";
+    }
 }
 
 
@@ -40,6 +47,11 @@ public struct PeakID
     public PeakID(PixelID pixelId)
     {
         peakMax = pixelId;
+    }
+
+    public string DebugStr()
+    {
+        return peakMax.DebugStr();
     }
 }
 // DensityPlane represents a 2D density plot
@@ -104,6 +116,20 @@ public class DensityPlane
             }
             return neighbors;
         }
+    public float MaximumValue(List<PixelID> candidates)
+    {
+        float maxScore = float.MinValue;
+
+        foreach (PixelID candidate in candidates)
+        {
+            float nthScore = valueAtPixel(candidate);
+            if (nthScore > maxScore)
+            {
+                maxScore = nthScore;
+            }
+        }
+        return maxScore;
+    }
     public PixelID? FindMaximum(List<PixelID> candidates)
     {
         if (candidates.Count == 0)
@@ -112,7 +138,7 @@ public class DensityPlane
         }
         PixelID bestCandidate = candidates[0];
         float currMax = valueAtPixel(bestCandidate);
-        foreach(PixelID candidate in candidates)
+        foreach (PixelID candidate in candidates)
         {
             float nthPopulation = valueAtPixel(candidate);
             if (nthPopulation > currMax)
@@ -122,6 +148,42 @@ public class DensityPlane
             }
         }
         return bestCandidate;
+    }
+    public (TwoDGridCoord, TwoDGridCoord) MinMaxGridCoords()
+    {
+        int miny = 0;
+        int minx = 0;
+        int maxy = 0;
+        int maxx = 0;
+        bool first = true;
+      
+        var pixelIds = data.Keys.ToList();
+        pixelIds.Sort();
+        foreach (PixelID pixelId in pixelIds)
+        {
+            int x;
+            int y;
+            (x, y) = pixelId.xyCoords();
+            if (!first)
+            {
+                miny = Math.Min(y, miny);
+                maxy = Math.Max(y, maxy);
+                minx = Math.Min(x, minx);
+                maxx = Math.Max(x, maxx);
+            }
+            else
+            {
+                miny = y;
+                maxy = y;
+                minx = x;
+                maxx = x;
+                first = false;
+            }
+            float binx = x * binsize;
+            float biny = y * binsize;
+            // Debug.WriteLine("x = " + binx + ",y = " + biny + ", population = " + data[key]);
+        }
+        return (new TwoDGridCoord(minx, miny), new TwoDGridCoord(maxx, maxy));
     }
     public void ConsoleDump(string prefix)
     {
@@ -217,6 +279,7 @@ public class DensityPlane
         int yBinIndex = (int)MathF.Floor((y + halfBinsize) * oneOverBinsize);
         return (xBinIndex, yBinIndex);
     }
+
     public PixelID PixelIDFor(float x, float y)
     {
         int binx;
