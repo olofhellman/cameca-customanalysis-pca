@@ -29,7 +29,11 @@ public class PhaseIdResults
 
     public int? PhaseForVoxel(int voxelId)
     {
-        return identifiedPhase[voxelId];
+        if (identifiedPhase.ContainsKey(voxelId))
+        {
+            return identifiedPhase[voxelId];
+        }
+        return null;
     }
 
     public List<int> UnidentifiedVoxels()
