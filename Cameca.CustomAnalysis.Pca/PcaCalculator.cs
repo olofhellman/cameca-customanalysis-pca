@@ -1,8 +1,45 @@
 ﻿using Cameca.CustomAnalysis.Interface;
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace Cameca.CustomAnalysis.Pca;
+
+public delegate float[] GetScoresDelegate(int voxelIndex);
+
+public class PcaScoresGridProducer: IScoresProvider {
+
+    ComponentsResults compResults;
+    int nComponents;
+
+    public PcaScoresGridProducer(ComponentsResults results)
+    {
+        compResults = results;
+        nComponents = compResults.Components.Count;
+    }
+
+    public float[] GetScores(int voxelIndex)
+    {
+        float[] scores = new float[nComponents];
+        for (int i = 0; i < nComponents; i++)
+        {
+            scores[i] = compResults.Components[i].Scores[voxelIndex];
+        }
+        return scores;
+    }
+
+    public PcaScoresGrid ScoresGrid()
+    {
+
+        int nAllVoxels = compResults.Grid3DData.NumVoxels[0] * compResults.Grid3DData.NumVoxels[1] * compResults.Grid3DData.NumVoxels[2];
+        int nComponents = compResults.Components.Count;
+        List<int> voxelIndices = new List<int>(compResults.VoxelIndices);
+
+        return new PcaScoresGrid(this, voxelIndices, nComponents, compResults.Grid3DData.NumVoxels);
+    }
+}
 
 internal static class PcaCalculator
 {
@@ -57,6 +94,16 @@ internal static class PcaCalculator
         PcaLib.doEigen(nVoxels, nFeatures, dataBuffer, nevals, evals);
 
         return new EigenvalueResults(evals);
+    }
+
+    // manipulate the results of PCA to identify phases per voxel
+    public static PhaseIdResults GetPhases(IIonData ionData, ComponentsResults compResults)
+    {
+        // make a PcaGrid, then call grid.GetPhases
+        PcaScoresGridProducer producer = new PcaScoresGridProducer(compResults);
+
+        PcaScoresGrid scoresGrid = producer.ScoresGrid();
+        return scoresGrid.GetPhasesStrategyC();
     }
 
     public static NoiseEigenvalueResults GetNoiseEigenvalues(float[] evals, int gaps, int significance, bool refine)
