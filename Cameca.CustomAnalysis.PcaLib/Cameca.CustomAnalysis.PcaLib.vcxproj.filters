@@ -24,12 +24,18 @@
     <ClInclude Include="doPCA_float.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RMT_rank.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="doPCA_float.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RMT_rank.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

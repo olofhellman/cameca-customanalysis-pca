@@ -62,53 +62,34 @@ internal static class PcaCalculator
         var localBuffer = Enumerable.Range(0, nFeatures)
             .Select(ionIndex => gridData.GetDataForIon(ionIndex).ToArray())
             .ToArray();
+
         var nonEmptyVoxels = new List<int>();
-
-        // string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        // string outputFilename = System.IO.Path.Combine(docPath, "FilledVoxels.surf");
- 
-        // using (StreamWriter outputFile = new StreamWriter(outputFilename))
-        // {
-            // outputFile.WriteLine("surf file");
-            // outputFile.WriteLine("triangle vertices:");
-
- 
-            for (int voxelIndex = 0; voxelIndex < nAllVoxels; voxelIndex++)
+        for (int voxelIndex = 0; voxelIndex < nAllVoxels; voxelIndex++)
+        {
+            for (int ionIndex = 0; ionIndex < nFeatures; ionIndex++)
             {
-                for (int ionIndex = 0; ionIndex < nFeatures; ionIndex++)
+                if (localBuffer[ionIndex][voxelIndex] != 0f)
                 {
-                    if (localBuffer[ionIndex][voxelIndex] != 0f)
-                    {
-                        nonEmptyVoxels.Add(voxelIndex);
-                       //  outputFile.Write("x");
-                        break;
-                    }
-                    
+                    nonEmptyVoxels.Add(voxelIndex);
+                    break;
                 }
-
-                // outputFile.Write("."); // need to add logic to not write if we wrote an x
             }
-
-            // outputFile.Close();
-        // }
-
-
+        }
         int nVoxels = nonEmptyVoxels.Count;
 
-            var dataBuffer = new float[nFeatures * nVoxels];
-            for (int featureIndex = 0; featureIndex < nFeatures; featureIndex++)
+        var dataBuffer = new float[nFeatures * nVoxels];
+        for (int featureIndex = 0; featureIndex < nFeatures; featureIndex++)
+        {
+            int x = 0;
+            foreach (int voxelIndex in nonEmptyVoxels)
             {
-                int x = 0;
-                foreach (int voxelIndex in nonEmptyVoxels)
-                {
-                    dataBuffer[(featureIndex * nVoxels) + x++] = localBuffer[featureIndex][voxelIndex];
-                }
+                dataBuffer[(featureIndex * nVoxels) + x++] = localBuffer[featureIndex][voxelIndex];
             }
+        }
 
-            int nevals = nFeatures;  // Input?
+        int nevals = nFeatures;  // Input?
 
-            float[] evals = new float[nevals];
-   
+        float[] evals = new float[nevals];
 
         PcaLib.doEigen(nVoxels, nFeatures, dataBuffer, nevals, evals);
 
@@ -125,8 +106,15 @@ internal static class PcaCalculator
         return scoresGrid.GetPhasesStrategyC();
     }
 
-     
-   
+    public static NoiseEigenvalueResults GetNoiseEigenvalues(float[] evals, int gaps, int significance, bool refine)
+    {
+        int nevals = evals.Length;
+        int rank = PcaLib.EstimateRankF(evals, nevals, nevals, gaps, significance, refine);
+
+        float[] noiseEvals = new float[nevals - rank];
+        PcaLib.NoiseEvals(rank, nevals, nevals, noiseEvals);
+        return new NoiseEigenvalueResults(rank, noiseEvals);
+    }
 
     public static ComponentsResults GetComponents(IIonData ionData, IGrid3DData gridData, int nComponents)
     {
@@ -169,10 +157,8 @@ internal static class PcaCalculator
 
 
         // Allocated output buffers
-        int scoresArrayLength = nVoxels * nComponents;
-        int loadsArrayLength = nFeatures * nComponents;
-        float[] scores = new float[scoresArrayLength];
-        float[] loads = new float[loadsArrayLength];
+        float[] scores = new float[nVoxels * nComponents];
+        float[] loads = new float[nFeatures * nComponents];
         float[] evals = new float[nevals];
 
         // Call the doPCA function
@@ -198,4 +184,3 @@ internal static class PcaCalculator
         return new ComponentsResults(gridData, nonEmptyVoxels.ToArray(), components);
     }
 }
- 

@@ -28,5 +28,3 @@ public sealed class ComponentsResults
     }
 
 }
-
- 
