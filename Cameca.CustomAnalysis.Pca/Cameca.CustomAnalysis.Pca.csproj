@@ -34,8 +34,9 @@
 	</PropertyGroup>
 
 	<ItemGroup Label="Package Dependencies">
+		<PackageReference Include="Cameca.CustomAnalysis.Interface" Version="3.7.0" />
 		<PackageReference Include="Cameca.CustomAnalysis.Utilities" Version="3.7.0-alpha.12" />
-		<PackageReference Include="Cameca.Extensions.Controls" Version="1.3.0-alpha.5" />
+		<PackageReference Include="Cameca.Extensions.Controls" Version="1.3.0" />
 		<PackageReference Include="LiveCharts.Wpf.NetCore3" Version="0.9.8" />
 		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
 	</ItemGroup>

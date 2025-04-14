@@ -1,11 +1,12 @@
 ﻿using Cameca.CustomAnalysis.Interface;
+using System;
 using System.Numerics;
 
 namespace Cameca.CustomAnalysis.Pca;
 
 internal static class PositionScores
 {
-    public static Vector4[] GetScoredPositions(IGrid3DData gridData, int[] voxelIndices, float[] scores)
+    public static Vector4[] GetScoredPositions(IGrid3DData gridData, int[] voxelIndices, float[] scores, float jitterStdDev = 0f)
     {
 
 
@@ -23,6 +24,9 @@ internal static class PositionScores
 
         int indexer = 0;
         var positionsWithValues = new Vector4[voxelIndices.Length];
+
+        int seed = 0;
+        var r = new Random(seed);
         for (int z = 0; z < zVoxels; z++)
         {
             for (int y = 0; y < yVoxels; y++)
@@ -33,9 +37,9 @@ internal static class PositionScores
                     if (voxelIndices[indexer] == voxelIndex)
                     {
                         positionsWithValues[indexer] = new Vector4(
-                            (float)(xStart + (xSize * x)),
-                            (float)(yStart + (ySize * y)),
-                            (float)(zStart + (zSize * z)),
+                            (float)(xStart + (xSize * x)) + r.NextSingleNormal(stdDev: jitterStdDev),
+                            (float)(yStart + (ySize * y)) + r.NextSingleNormal(stdDev: jitterStdDev),
+                            (float)(zStart + (zSize * z)) + r.NextSingleNormal(stdDev: jitterStdDev),
                             scores[indexer]);
                         indexer++;
                         if (indexer >= voxelIndices.Length)
@@ -56,5 +60,17 @@ internal static class PositionScores
         }
 
         return positionsWithValues;
+    }
+
+}
+
+internal static class RandomExtensions
+{
+    public static float NextSingleNormal(this Random random, float mean = 0, float stdDev = 1)
+    {
+        float u1 = 1f - random.NextSingle();
+        float u2 = 1f - random.NextSingle();
+        float randStdNormal = MathF.Sqrt(-2f * MathF.Log(u1)) * MathF.Sin(2f * MathF.PI * u2);
+        return mean + stdDev * randStdNormal;
     }
 }

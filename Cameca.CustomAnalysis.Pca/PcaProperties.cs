@@ -1,55 +1,80 @@
-﻿using Prism.Mvvm;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Windows.Media;
 using System.Xml.Serialization;
 
 namespace Cameca.CustomAnalysis.Pca;
 
-[XmlRoot("PcaOptions")]
-public class PcaProperties : BindableBase
+public enum BornemannTableSignificance
 {
+    [Display(Name = "0.999")]
+    Sig999  = 0,
+    [Display(Name = "0.995")]
+    Sig995 = 1,
+    [Display(Name = "0.990")]
+    Sig990 = 2,
+    [Display(Name = "0.980")]
+    Sig980 = 3,
+    [Display(Name = "0.950")]
+    Sig950 = 4,
+    [Display(Name = "0.900")]
+    Sig900 = 5,
+}
+
+[XmlRoot("PcaOptions")]
+public partial class PcaProperties : ObservableObject
+{
+    [ObservableProperty]
+    private int gaps = 1;
+
+    [ObservableProperty]
+    private BornemannTableSignificance significance = BornemannTableSignificance.Sig995;
+
+    [ObservableProperty]
+    private bool refine = true;
+
+    [ObservableProperty]
     private int components = 0;
-    public int Components
-    {
-        get => components;
-        set => SetProperty(ref components, value);
-    }
 
+    [ObservableProperty]
+    [field:Display(Name = "Component Index")]
     private int componentIndex = 0;
-    [Display(Name = "Component Index")]
-    public int ComponentIndex
-    {
-        get => componentIndex;
-        set => SetProperty(ref componentIndex, value);
-    }
 
+    [ObservableProperty]
     private float isovalue = 1f;
-    public float Isovalue
-    {
-        get => isovalue;
-        set => SetProperty(ref isovalue, value);
-    }
 
+    [ObservableProperty]
+    [field:ReadOnly(true)]
     private float? min = null;
-    [ReadOnly(true)]
-    public float? Min
-    {
-        get => min;
-        set => SetProperty(ref min, value);
-    }
 
+    [ObservableProperty]
+    [field:ReadOnly(true)]
     private float? max = null;
-    [ReadOnly(true)]
-    public float? Max
-    {
-        get => max;
-        set => SetProperty(ref max, value);
-    }
 
+    [ObservableProperty]
     private bool invert = false;
-    public bool Invert
-    {
-        get => invert;
-        set => SetProperty(ref invert, value);
-    }
+
+    [Display(AutoGenerateField = false)]
+    public SerializableColorMap? ColorMap { get; set; }
+}
+
+public class SerializableColorMap
+{
+    public Color Bottom { get; set; }
+    public Color NanColor { get; set; }
+    public Color OutOfRangeBottom { get; set; }
+    public Color OutOfRangeTop { get; set; }
+    public Color Top { get; set; }
+    public List<SerializableColorStop> ColorStops { get; set; } = new();
+    public float BottomValue { get; set; }
+    public float TopValue { get; set; }
+}
+
+public class SerializableColorStop
+{
+    public Color BottomColor { get; set; }
+    public float RelativePosition { get; set; }
+    public Color TopColor { get; set; }
 }

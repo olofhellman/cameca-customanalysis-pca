@@ -2,9 +2,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 
+
+// PhaseIDResults represents an assignment of each voxel to an integer phase.
+// in the identifiedPhase Dictionary, the Key is a VoxelID, and the value is its 'phase', 
+// or 0 if no phase is identified
 public class PhaseIdResults
 {
-    Dictionary<int, int> identifiedPhase;
+    Dictionary<int, int> identifiedPhase; 
 
     public PhaseIdResults(List<int> voxelIndices, int maxIndex)
     {
