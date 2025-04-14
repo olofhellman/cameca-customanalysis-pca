@@ -54,11 +54,17 @@ public struct PeakID
         return peakMax.DebugStr();
     }
 }
-// DensityPlane represents a 2D density plot
+
+// DensityPlane represents a 2D density plot, and the bins exist on a 2D grid
 // Bins are regularly spaced from the minimum to the maximum
-// Bins have an integer id according to their distances from 0
-// the ID of a point at x,y is 1024y + x
-// So, the bin corresponding to x = 3, y = 4 if the bins are 0.5 apart, the ID=4051
+// a binsize maps a floating point coordinate to a grid coordinate.
+// if the binsize is 1, then the grid coordinate at p-1, q=1 represents the floating point coordinate 1.0, 1.0
+// if the binsize is 0.5, then the grid coordinate at p-1, q=1 represents the floating point coordinate 0.5, 0.5
+// Bins have an integer id derived from their p and q coordinates :  1024q + p 
+// So, for a binsize of 1.0, the xy coordinate 3.0,4.0 would correspond to 
+// the bin at p = 3, q = 4 and the ID would be 4099
+// if the binsize is 0.5, a point at x=3, y=4 would be the gridpoint p=6, q=8, and the ID would be 8198
+//
 // The data is collected in a Dictionary<int, float>
 // if a bin is unpopulated, there is no Dictionary entry for the corresponding ID
 // smoothing is applied at population time: when a point is added,  it is automatically split 
@@ -67,6 +73,17 @@ public struct PeakID
 // bins at negative values have negative indices
 // "out of bounds" limits at -510 and 510
 //  points outside of the bounds are counted but not binned
+// 
+// Points are added to the Plane using a splat transfer function, in a way that the 
+// delocalization for every point added to the profile is almost constant.  That is,
+// if a point is added at a corner of the grid, equidistant from four different grid points, 
+// it contributes .25 to each of the four bins The 1 dimensional transfer function is used in both 
+// dimensions, so that if a point is added exactly at a grid point, it only contributes 9/16 to that point
+// and 7/16 to the surrounding points following this matrix of contributions:
+//
+//   1/64   3/32   1/64
+//   3/32   9/16   3/32 
+//   1/64   3/32   1/64
 public class DensityPlane
 {
     float halfBinsize;
@@ -75,6 +92,7 @@ public class DensityPlane
     int oobPoints;
     float maxval;
     Dictionary<PixelID, float> data;
+    
     public DensityPlane(float binSep)
     {
         binsize = binSep;
@@ -84,10 +102,12 @@ public class DensityPlane
         data = new Dictionary<PixelID, float>();
         maxval = 1022.0f * binSep;
     }
+    
     public List<PixelID> GridPointIds()
     {
         return data.Keys.ToList();
     }
+    
     public List<PixelID> PixelIdsNeighboring(PixelID pixelId)
     {
         int x;
@@ -99,23 +119,24 @@ public class DensityPlane
         {
             neighbors.Add(neighborBin);
         }
-            neighborBin = new PixelID(x + 1, y);
-            if (data.ContainsKey(neighborBin))
-            {
-                neighbors.Add(neighborBin);
-            }
-            neighborBin = new PixelID(x, y - 1);
-            if (data.ContainsKey(neighborBin))
-            {
-                neighbors.Add(neighborBin);
-            }
-            neighborBin = new PixelID(x, y + 1);
-            if (data.ContainsKey(neighborBin))
-            {
-                neighbors.Add(neighborBin);
-            }
-            return neighbors;
-        }
+		neighborBin = new PixelID(x + 1, y);
+		if (data.ContainsKey(neighborBin))
+		{
+			neighbors.Add(neighborBin);
+		}
+		neighborBin = new PixelID(x, y - 1);
+		if (data.ContainsKey(neighborBin))
+		{
+			neighbors.Add(neighborBin);
+		}
+		neighborBin = new PixelID(x, y + 1);
+		if (data.ContainsKey(neighborBin))
+		{
+			neighbors.Add(neighborBin);
+		}
+		return neighbors;
+	}
+	
     public float MaximumValue(List<PixelID> candidates)
     {
         float maxScore = float.MinValue;
@@ -130,6 +151,7 @@ public class DensityPlane
         }
         return maxScore;
     }
+    
     public PixelID? FindMaximum(List<PixelID> candidates)
     {
         if (candidates.Count == 0)
@@ -149,6 +171,7 @@ public class DensityPlane
         }
         return bestCandidate;
     }
+    
     public (TwoDGridCoord, TwoDGridCoord) MinMaxGridCoords()
     {
         int miny = 0;
@@ -185,6 +208,42 @@ public class DensityPlane
         }
         return (new TwoDGridCoord(minx, miny), new TwoDGridCoord(maxx, maxy));
     }
+    
+    public string WriteToStream(StreamWriter stream)
+    {    
+		int xSize = 1 + maxx - minx;
+		int ySize = 1 + maxy - miny;
+		stream.WriteLine("x size= " + xSize);
+		stream.WriteLine("y size= " + ySize);
+
+		stream.Write("{ " );
+		// now csv data for the grid from min to max
+		for (int y = miny; y <= maxy; ++y)
+		{
+			string l = "{";
+			for (int x = minx; x <= maxx; ++x)
+			{
+				PixelID xthKey = new PixelID(x, y);
+				float xthValue = 0;
+				if (data.ContainsKey(xthKey))
+				{
+					xthValue = data[xthKey];
+				}
+				l = l + xthValue;
+				if (x != maxx) {
+					l = l + ",";
+				}  
+			}
+			l = l + "}";
+			stream.Write(l);
+			if (y != maxy)
+			{
+				stream.Write(",");
+			}
+		}
+		stream.Write("}");
+    }
+    
     public void ConsoleDump(string prefix)
     {
         int miny = 0; 
@@ -217,48 +276,19 @@ public class DensityPlane
             }
             float binx = x * binsize;
             float biny = y * binsize;
-            // Debug.WriteLine("x = " + binx + ",y = " + biny + ", population = " + data[key]);
+            Debug.WriteLine("x = " + binx + ",y = " + biny + ", population = " + data[key]);
         }
-
-        Debug.WriteLine("csv data:");
+    }
+    
+    public float writeToFile(string outputFilename)
+    {   
         string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        string outputFilename = System.IO.Path.Combine(docPath, prefix + ".csv");
         using (StreamWriter outputFile = new StreamWriter(outputFilename))
         {
-            int xSize = 1 + maxx - minx;
-            int ySize = 1 + maxy - miny;
-            outputFile.WriteLine("x size= " + xSize);
-            outputFile.WriteLine("y size= " + ySize);
-
-            outputFile.Write("{ " );
-            // now csv data for the grid from min to max
-            for (int y = miny; y <= maxy; ++y)
-            {
-                string l = "{";
-                for (int x = minx; x <= maxx; ++x)
-                {
-                    PixelID xthKey = new PixelID(x, y);
-                    float xthValue = 0;
-                    if (data.ContainsKey(xthKey))
-                    {
-                        xthValue = data[xthKey];
-                    }
-                    l = l + xthValue;
-                    if (x != maxx) {
-                        l = l + ",";
-                    }  
-                }
-                l = l + "}";
-                outputFile.Write(l);
-                if (y != maxy)
-                {
-                    outputFile.Write(",");
-                }
-            }
-            outputFile.Write("}");
+            self.WriteToStream(outputFile);
         }
-
     }
+    
     public float valueAtPixel(PixelID pixelId)
     {
         float binValue;
@@ -268,6 +298,7 @@ public class DensityPlane
         }
         return 0.0f;
     }
+    
     PixelID BinFor(int x, int y)
     {
         return new PixelID(y * 1024 + x);

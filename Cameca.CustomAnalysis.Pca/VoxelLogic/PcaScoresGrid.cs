@@ -5,7 +5,13 @@ using System;
 using System.IO;
  
  
- 
+// PcaScoresGrid represents a three dimensional grid containing the PCA scores for a collection of voxels
+// PcaScoresGrid is initialized with the size of the grid in x y and z, so that it can then map 
+// a particular [x,y,z] grid coordinate to an index (and back) 
+//
+// Of particular interest to the PCA data processing logic, this class implements the logic for 
+// calculating PhaseIdResults -- using the PCA score data to identify which voxels belong to which 
+// 'phases'
 
 public interface IScoresProvider
 {
@@ -94,72 +100,67 @@ public class PcaScoresGrid
         return voxels;
     }
 
-    // This strategy looks first at finding density peaks in PCA space
-    // Then, draws N dimensional spheres around each peak and assigns voxels in those spheres to be the given component
-    // On a first pass, the data is binned one dimensionally in each of the PCA dimensions
-    // This allows A) ranges to be set and B) predictions to be made about what the expected population of 
-    // an N dimensional bin at any N dimensional coordinate if the values where uncorrelated
-    // then a 2D binning is made with the first two PCA dimensions, and deviations from the calculated populations are 
-    // estimated
-
+    // GetPhasesStrategyC is produces PhaseIdResults based on the first two 
+    // PCA dimensions only (later strategies will incorporate more dimensions)
+    //
+    // The strategy goes like this:
+    //
+    // A) make a 2D grid representing the density of voxels with PCA scores in 
+    //    the first two PCA dimensions at x,y
+    // B) identify peaks in that 2D grid -- each peak corresponds to a 'phase'
+    // C) assign voxels with PCA scores in each peak to the corresponding phase
     public PhaseIdResults GetPhasesStrategyC()
     {
         List<int> voxelIndices = pcaVoxels.Keys.ToList();
 
         PhaseIdResults phaseIdResults = new PhaseIdResults(voxelIndices, nVoxels);
 
-        // oneDDensities contains one list for each PCA dimension
-        // each list is a smoothed histogram of populations 
-        // first float is coordinate point, second float is the population
-        // on first pass, the coordinate points are 0.5 apart
-        // So, if there are points between 0 and 10, there may be 23 entries, from -0.5 to 10.5
-        // at spacings of 0.5
-        // float binSeparation = 0.5f;
-        // List<DensityProfile> oneDDensities = CalculateOneDDensities(voxelIndices, binSeparation);
-        // for (int i = 0; i < this.scoreDims; ++i)
-        // {
-        //     oneDDensities[i].ConsoleDump("density " + i);
-        // }
-
         float binSeparation = 0.5f;
         int gridDims = Math.Min(2, this.scoreDims); // 2 is the simplest choice 
         Dictionary<int, DensityPlane> twoDGrids = new Dictionary<int, DensityPlane>();
         Dictionary<int, List<List<PixelID>>> partitions = new Dictionary<int, List<List<PixelID>>>();
+        
+        
         // now, make twoD grids using all pairs of dimensions
+        // yes, GetPhasesStrategyC only uses 2 dimensions, so these loops are useless, 
+        // but they will be used in successive strategies when there are more dimensions used
         for (int i = 0; i < (gridDims - 1); ++i)
         {
             for (int j = i + 1; j < gridDims; ++j)
             {
                 int gridId = 10 * i + j;
+                
+                // this makes the 2D grid  --  step A) above
                 var twoDGrid = CalculateTwoDDensity(voxelIndices, i, j, binSeparation);
-                twoDGrid.ConsoleDump("dgrid" + i + j);
                 twoDGrids[gridId] = twoDGrid;
+                
+                // this identifies the peaks --  step B) above
                 List<List<PixelID>> partitionedIndices = IdentifyPartitions(twoDGrid, i, j, voxelIndices);
                 partitions[gridId] = partitionedIndices;
             }
         }
 
-
-
-
-        // now turn the partitions array into the data needed by phaseIDResults
-        // phaseIDResults has a method  IdentifyVoxelAs(int voxelIds, int phase)
-        // so, for each peak identified by the 2d grid partition, 
-        // make a list of voxels corresponding to that peak.
-        // a voxel corresponds to the peak if its PCA scores for the given two dimensions 
-        // is in a pixel of a peak.
+        // now turn the partitions array into the data needed by phaseIDResults -- step C) above
         // 
-        // to avoid looking up whether o not the pixel from each voxel is in one of the peaks
-        // first, group all the voxelIDs into leist for each pixelID
+        // phaseIDResults has a method  IdentifyVoxelAs(int voxelIds, int phase)
+        //
+        // a voxel corresponds to the peak if its PCA scores for the given two dimensions 
+        // is in a pixel of a peak. So, for each voxel, we want to call IdentifyVoxelAs()
+        // with the value for 'phase' corresponding to the peak it is in, if any
+        //
+        // to avoid looking up whether or not a pixel is in one of the peaks multiple times,
+        // first, group all the voxelIDs into a list for each pixelID
         // then do a single lookup for each pixelID
 
         if (gridDims > 1)
         {
+            // GetPhasesStrategyC only looks at one grid -- the first one
             int firstGridId = 1;
             DensityPlane grid = twoDGrids[firstGridId];
             List<List<PixelID>> firstGridPartitions = partitions[firstGridId];
 
             // for debugging, dump the partitions:
+            /* 
             string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             string outputFilename = System.IO.Path.Combine(docPath, "Partitions.txt");
 
@@ -192,7 +193,10 @@ public class PcaScoresGrid
                     outputFile.Write("}\n");
                 }
             }
-
+            */
+            // end of debug dump
+            
+            // For each voxel, assign the voxel to the List corresponding with its pixel
             Dictionary<PixelID, List<int>> voxelLists = new Dictionary<PixelID, List<int>>();
             foreach (int voxelId in voxelIndices)
             {
@@ -213,7 +217,7 @@ public class PcaScoresGrid
 
             // now, each voxelIndex is a member of one of the lists in voxelLists
             // go through each list in voxelLists and see if its pixel is designated in a particular partiion
-           
+            // that is, for each pixel, see which peak it belongs to, if any
              
             int listN = 1;
             foreach (List<PixelID> pixelIdList in firstGridPartitions)
@@ -248,28 +252,6 @@ public class PcaScoresGrid
             }
         }
 
-        // using a twoDGrid, return lists of voxel indices that are in clusters or not
-        // to identify clusters, first, look for maxima in the twoD grid
-        // for each maximum, find connected pixels reachable in a gradient descent,
-        // stopping at 5% of the first peak
-        // pixels reachable from multiple peaks should not be classified as either
-        // 5% of the first peak is also the threshhold for finding maxima
-
-
-
-
-
-
-        // var twoDGridAB = calculateTwoDDensity(voxelIndices, 0, 1, binSeparation);
-        // twoDGridAB.ConsoleDump("dgrid01");
-        // var twoDGridAC = calculateTwoDDensity(voxelIndices, 0, 2, binSeparation);
-        // twoDGridAC.ConsoleDump("dgrid02");
-        // var twoDGridBC = calculateTwoDDensity(voxelIndices, 1, 2, binSeparation);
-        // twoDGridBC.ConsoleDump("dgrid12");
-
-
-
-
         return phaseIdResults;
     }
 
@@ -295,7 +277,6 @@ public class PcaScoresGrid
         // associated with the different maxima
         TwoDGridPartitionFinder partitionFinder = new TwoDGridPartitionFinder(twoDGrid);
 
-
         partitionFinder.FindPartitions(0.1f);
         var pixelLists = partitionFinder.GetPixelLists();
         partitionFinder.Clear();
@@ -316,7 +297,22 @@ public class PcaScoresGrid
         return densityPlane;
     }
 
-   
+    // CalculateOneDDensities is not used, but here's what it does:
+	// it creates a profile along each of the principal PCA dimensions 
+	// of the density of voxels along that dimension 
+	// That is, peaks in the density profile represent PCA score values with a high population of 
+	// voxels. each Profile is a 'smoothed' histogram of populations 
+	// The AP Suite already has code that produces a similar histogram, displayed
+	// in one of the panes of the PCA Extension.
+	// 
+	// The number of points in the profile is determined by the binsize
+	// If there are points between 0 and 10, there may be 23 entries, from -0.5 to 10.5
+	// at spacings of 0.5
+	//
+	// It can be used like this:
+	//
+	// float binSeparation = 0.5f;
+	// List<DensityProfile> oneDDensities = CalculateOneDDensities(voxelIndices, binSeparation);
 
     public List<DensityProfile> CalculateOneDDensities(List<int> voxelIndices, float binsize)
     {

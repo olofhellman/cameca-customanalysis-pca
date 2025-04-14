@@ -13,6 +13,10 @@ public class TwoDGridPartitionFinder
     List<PixelID> foundIncreasePixelIds; // when a peak finds an increase, remember it here
     Dictionary<PeakID, TwoDPeak> peaks;
 
+    // These are the return codes returned by IterateIdentifyingPeaks()
+    // Depending on this result, the Logic in FindPartitions will either
+    // seach for a new peak, or lower the search floor parameter provided to 
+    // IterateIdentifyingPeaks()
     public enum ReturnCode {
         noStatus,
         foundIncrease,
@@ -181,6 +185,18 @@ public class TwoDGridPartitionFinder
         return pixelLists;
     }
 
+    // FindPartitions sets up the initial conditions for identifying peaks in the DensityPlane
+    // and calls IterateIdentifyingPeaks() to do most of the work
+    //
+    // each time it calls IterateIdentifyingPeaks() it provides a floor for values to look for
+    // The initial search floor is essentially a cutoff for how much of the peak to accept
+    // Initially it is tied here to the 10% of the value of the highest peak (the noise floor fraction)
+    //   -- this will be a good parameter to expose to users.
+    // However, the search floor is also set when the algorithm knows that higher peak must exist 
+    // above a certain value (because it found a pixel not connected to an existing peak with a higher value)
+    // When this happens, the algorithm searches for another peak and its related pixels
+    // As long as the pixel it found is not in fact part of new peak, the algorithm knows it should 
+    // look for another peak
     public void FindPartitions(float noiseFloorFraction)
     {
         float noiseFloor = grid.MaximumValue(unplacedPixelIds) * noiseFloorFraction;

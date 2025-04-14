@@ -12,6 +12,7 @@ using System.IO;
 using System.Xml.Schema;
 using Cameca.CustomAnalysis.Interface;
 
+// PcaVoxel represents a voxel and its PCA scores returned from the PCA algorithm
 public struct PcaVoxel
 {
     public int voxelIndex; // the voxelIndex from compResults.VoxelIndices;  (between 0 and nTotalVoxels - 1)

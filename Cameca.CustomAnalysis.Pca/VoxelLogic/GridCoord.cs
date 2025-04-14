@@ -2,10 +2,9 @@ using System.Collections.Generic;
 using System;
 
 
-
+// TwoDGridCoord is a pair of integers identifying a point on a Two Dimensional grid
 public struct TwoDGridCoord
 {
-
     public int x;
     public int y;
 
@@ -19,9 +18,10 @@ public struct TwoDGridCoord
         Console.WriteLine(prefix + this.x, ", ", + this.y);
     }
 }; 
+
+// GridCoord is a triplet of integers identifying a point on a Three Dimensional grid
 public struct GridCoord
 {
-
     public int x;
     public int y;
     public int z;

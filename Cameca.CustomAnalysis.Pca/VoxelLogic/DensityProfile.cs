@@ -17,6 +17,11 @@ using System.IO;
 // bins at negative values have negative indices
 // "out of bounds" limits at -1023 and 1023
 //  points outside of the bounds are counted but not binned
+// Points are added to the profile using a splat transfer function, in a way that the 
+// delocalization for every point added to the profile is constant.  That is,
+// if a point is added at the center of a bin, it contributes .75 to that bin and .125 to each neighbor bin
+// If a point is added exactly at the border between two bins, it contributes 0.5 to each one
+
 public class DensityProfile
 {
     float maxval;

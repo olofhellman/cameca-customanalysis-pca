@@ -4,6 +4,8 @@ using System;
 using PcaExtensionMethods;
 
 
+// PixelSuggestion represents a pixel that could be added to a TwoDPeak as part of the PartitionFinder
+// peak partitioning algorithm
 public struct PixelSuggestion : IComparable<PixelSuggestion>
 {
     public float score;
@@ -30,6 +32,55 @@ public struct PixelSuggestion : IComparable<PixelSuggestion>
 }
 
 
+// TwoDPeak represents a maximum in a DensityPlane grid and its surrounding pixels, as part of
+// the Partitioning algorithm implemented in TwoDGridPartitionFinder
+// Initially it is created with a single pixel location, and it grows to surrounding pixels
+// governed by the TwoDGridPartitionFinder.
+//
+// It maintains an ordered list of "pixels to add", and during the algorithm, repeated provides
+// to PartitionFinder the next 'best candidate' for adding to itself.  PartitionFinder evaluates all the 
+// candidates provided by all the peaks it knows about, and selects them.  When a candidate is selected
+// the SuggestionAccepted method is called, and new potential candidates are added to its list of "pixels to add"
+//
+// As an example, if the densities look like this:
+//
+//   50     70    50     40    30
+//   80    101   100     97    70
+//   70     99    98     80    60
+//   30     40    50     70    50   
+//
+// The peak would grow like this:
+//
+//  Cycle       values of ids in the Peak list   Values of Pixels in the candidates list 
+//  0           {}                               {101}
+//  1           {101}                            {100, 99, 80, 70}
+//  2           {101, 100}                       {99, 98, 97, 80, 70, 50}
+//  3           {101, 100, 99}                   {98, 97, 80, 70, 70, 50, 40}
+//  4           {101, 100, 99, 98}               {97, 80, 80, 70, 70, 50, 50, 40}
+//  5           {101, 100, 99, 98, 97}           {80, 80, 70, 70, 70, 50, 50, 40, 40}
+//  6           {101, 100, 99, 98, 97, 80, 80}   {70, 70, 70, 70, 60, 50, 50, 50, 40, 40}
+//
+// After step 5, both of the '80' pixels would be returned as part of the best candidates.
+//
+// A future logical addition:  right now, the algorithm won't handle the case very well where what should really 
+// be a single peak is actually two maxima very close together. Some logic should be added so that when a 
+// "increase" is found above a certain fraction of the peak maximum, it is not considered as evidence of a second peak.
+//
+// As an example, if the densities look like this:
+//
+//   50     70    50     40    30
+//   80    101   100     97    70
+//   70    100    98     99    80
+//   30     40    50     70    50    
+//
+// The algorthim will find two peaks but it should probably only find one
+// The logic could be that if a pixel at higher than some threshhold of
+// the peak maximum, say 75%, finds an increase, it shouldn't warn of an 'increase found'
+// result, but just accumulate that pixel as well
+// in the example above, the peak would start at 101, then grow to the two 100 pixels.
+// the next candidate offered/accepted would be the 98 pixel.  At that point, the 99
+// pixel would be considered for adding to the candudates list, but as it is an increase from 
+// 98, algorithm would flag it as the case where a second peak must exist.
 public class TwoDPeak
 {
     public PeakID peakId;
