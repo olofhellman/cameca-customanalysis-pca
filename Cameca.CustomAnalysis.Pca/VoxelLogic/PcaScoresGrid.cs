@@ -277,7 +277,7 @@ public class PcaScoresGrid
         // associated with the different maxima
         TwoDGridPartitionFinder partitionFinder = new TwoDGridPartitionFinder(twoDGrid);
 
-        partitionFinder.FindPartitions(0.1f);
+        partitionFinder.FindPartitions(0.15f);
         var pixelLists = partitionFinder.GetPixelLists();
         partitionFinder.Clear();
         return pixelLists;
