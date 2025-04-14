@@ -1,6 +1,8 @@
 ﻿namespace Cameca.CustomAnalysis.Pca;
 
-internal sealed class ComponentResults
+// public rather than internal because a ComponentsResults object is used to 
+// call the PhaseIdResults constructor
+public sealed class ComponentResults
 {
     public float[] Scores { get; }
     public float[] Loads { get; }

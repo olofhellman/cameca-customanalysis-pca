@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Cameca.CustomAnalysis.Pca;
 
-internal sealed class ComponentsResults
+public sealed class ComponentsResults
 {
     public IGrid3DData Grid3DData { get; }
 
