@@ -209,19 +209,23 @@ public class DensityPlane
         return (new TwoDGridCoord(minx, miny), new TwoDGridCoord(maxx, maxy));
     }
     
-    public string WriteToStream(StreamWriter stream)
-    {    
-		int xSize = 1 + maxx - minx;
-		int ySize = 1 + maxy - miny;
+    public void WriteToStream(StreamWriter stream)
+    {
+        TwoDGridCoord min;
+        TwoDGridCoord max;
+        (min, max) = MinMaxGridCoords();
+
+        int xSize = 1 + max.x - min.x;
+		int ySize = 1 + max.y - min.y;
 		stream.WriteLine("x size= " + xSize);
 		stream.WriteLine("y size= " + ySize);
 
 		stream.Write("{ " );
 		// now csv data for the grid from min to max
-		for (int y = miny; y <= maxy; ++y)
+		for (int y = min.y; y <= max.y; ++y)
 		{
 			string l = "{";
-			for (int x = minx; x <= maxx; ++x)
+			for (int x = min.x; x <= max.x; ++x)
 			{
 				PixelID xthKey = new PixelID(x, y);
 				float xthValue = 0;
@@ -230,13 +234,13 @@ public class DensityPlane
 					xthValue = data[xthKey];
 				}
 				l = l + xthValue;
-				if (x != maxx) {
+				if (x != max.x) {
 					l = l + ",";
 				}  
 			}
 			l = l + "}";
 			stream.Write(l);
-			if (y != maxy)
+			if (y != max.y)
 			{
 				stream.Write(",");
 			}
@@ -276,16 +280,16 @@ public class DensityPlane
             }
             float binx = x * binsize;
             float biny = y * binsize;
-            Debug.WriteLine("x = " + binx + ",y = " + biny + ", population = " + data[key]);
+            Debug.WriteLine("x = " + binx + ",y = " + biny + ", population = " + data[pixelId]);
         }
     }
     
-    public float writeToFile(string outputFilename)
+    public void writeToFile(string outputFilename)
     {   
         string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         using (StreamWriter outputFile = new StreamWriter(outputFilename))
         {
-            self.WriteToStream(outputFile);
+            this.WriteToStream(outputFile);
         }
     }
     
