@@ -23,20 +23,4 @@ public static class PcaLib
         float[] data,
         int nevals,
         float[] evals);
-
-    [DllImport("Cameca.CustomAnalysis.PcaLib.dll", CallingConvention = CallingConvention.Cdecl)]
-    public static extern int EstimateRankF(
-        float[] evals,
-        int nevals,
-        int nObs,
-        int nGaps = 1,
-        int P = 1,
-        bool refine = false);
-
-    [DllImport("Cameca.CustomAnalysis.PcaLib.dll", CallingConvention = CallingConvention.Cdecl)]
-    public static extern int NoiseEvals(
-        int gapRank,
-        int nevals,
-        int nObs,
-        float[] y);
 }
