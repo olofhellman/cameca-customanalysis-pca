@@ -22,82 +22,18 @@
 
         <TabControl>
             <TabItem Header="Noise Eigenvalues">
-                <utils:ButtonOverlayControl ButtonCommand="{Binding UpdateRankEstimationCommand}"
-                                            ButtonContent="Update"
-                                            OverlayVisibility="{Binding UpdateRankEstimationCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <Grid>
-                        <controls:Chart2D DataSource="{Binding EigenvalueRenderData}"
-                                          IsLogScaleY="True"
-                                          AxisXLabel="Sorted eigenvalue index"
-                                          AxisYLabel="Eigenvalue"/>
-                    </Grid>
-                </utils:ButtonOverlayControl>
+                <controls:Chart2D DataSource="{Binding NoiseEigenValues}"
+                                  IsLogScaleY="True"
+                                  AxisXLabel="Sorted eigenvalue index"
+                                  AxisYLabel="Eigenvalue"/>
             </TabItem>
 
             <TabItem Header="Components">
                 <utils:ButtonOverlayControl ButtonCommand="{Binding UpdateComponentsCommand}"
                                 ButtonContent="Update"
                                 OverlayVisibility="{Binding UpdateComponentsCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
 
-                        <local:ComponentsTileView Grid.Column="0"
-                                                  Grid.Row="0"
-                                                  Grid.RowSpan="3"
-                                                  ItemsSource="{Binding ComponentRenderData}" />
-                        <Grid Grid.Column="1"
-                              Grid.Row="0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Label Grid.Column="0" Target="ColorMapMaxTextBox" Content="Max" Padding="0 0 8 0" />
-                            <TextBox Grid.Column="1" x:Name="ColorMapMaxTextBox">
-                                <TextBox.Text>
-                                    <Binding Path="ColorMap.TopValue"
-                                             UpdateSourceTrigger="PropertyChanged"
-                                             Delay="500">
-                                        <Binding.ValidationRules>
-                                            <local:NumericValidationRule />
-                                        </Binding.ValidationRules>
-                                    </Binding>
-                                </TextBox.Text>
-                            </TextBox>
-                        </Grid>
-                        
-                        <controls:ColorMapEditor Grid.Column="1"
-                                                 Grid.Row="1"
-                                                 ColorMap="{Binding ColorMap}"
-                                                 ValueLabel="Score" />
-                        
-                        <Grid Grid.Column="1"
-                              Grid.Row="2">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Label Grid.Column="0" Target="ColorMapMinTextBox" Content="Min" Padding="0 0 8 0" />
-                            <TextBox Grid.Column="1" x:Name="ColorMapMinTextBox">
-                                <TextBox.Text>
-                                    <Binding Path="ColorMap.BottomValue"
-                                             UpdateSourceTrigger="PropertyChanged"
-                                             Delay="500">
-                                        <Binding.ValidationRules>
-                                            <local:NumericValidationRule />
-                                        </Binding.ValidationRules>
-                                    </Binding>
-                                </TextBox.Text>
-                            </TextBox>
-                        </Grid>
-                    </Grid>
+                    <local:ComponentsTileView ItemsSource="{Binding ComponentRenderData}" />
                 </utils:ButtonOverlayControl>
             </TabItem>
             

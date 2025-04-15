@@ -15,7 +15,7 @@ using CommunityToolkit.Mvvm.Input;
 using LiveCharts;
 using LiveCharts.Configurations;
 using LiveCharts.Wpf;
-using System.Collections.ObjectModel;
+using static Cameca.CustomAnalysis.Interface.IonFormula;
 
 namespace Cameca.CustomAnalysis.Pca;
 
@@ -23,27 +23,20 @@ namespace Cameca.CustomAnalysis.Pca;
 internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaProperties>
 {
     private readonly INodeDataProvider nodeDataProvider;
-    private readonly IOptionsAccessor optionsAccessor;
+
     public const string UniqueId = "Cameca.CustomAnalysis.Pca.PcaNode";
 
     public static INodeDisplayInfo DisplayInfo { get; } = new NodeDisplayInfo("Principal Component Analysis");
 
-    public ObservableCollection<IRenderData> EigenvalueRenderData { get; } = new();
+    [ObservableProperty]
+    public ICollection<IRenderData> noiseEigenValues = Array.Empty<IRenderData>();
 
     [ObservableProperty]
     private ICollection<IRenderData> componentRenderData = Array.Empty<IRenderData>();
 
     [ObservableProperty]
-    private IColorMap? colorMap = null;
-
-    [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(UpdateCommand))]
     private EigenvalueResults? eigenvalueResults;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpdateRankEstimationCanExecute))]
-    [NotifyCanExecuteChangedFor(nameof(UpdateRankEstimationCommand))]
-    private NoiseEigenvalueResults? noiseEigenvalueResults;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UpdateComponentsCanExecute))]
@@ -69,8 +62,6 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
 
     public bool UpdateComponentsCanExecute => ComponentsResults is null;
 
-    public bool UpdateRankEstimationCanExecute => NoiseEigenvalueResults is null;
-
     public bool UpdateSelectedCopmponentCanExecute =>
         !LoadingsSeries.Any() || !LoadingsLables.Any() || !ScoresHistogramData.Any();
 
@@ -79,21 +70,10 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     public PrincipalComponentAnalysis(
         IStandardAnalysisFilterNodeBaseServices services,
         ResourceFactory resourceFactory,
-        INodeDataProvider nodeDataProvider,
-        IOptionsAccessor optionsAccessor)
+        INodeDataProvider nodeDataProvider)
         : base(services, resourceFactory)
     {
         this.nodeDataProvider = nodeDataProvider;
-        this.optionsAccessor = optionsAccessor;
-    }
-
-    protected override byte[]? GetSaveContent()
-    {
-        if (ColorMap is not null)
-        {
-            Properties.ColorMap = SerializeColorMap(ColorMap);
-        }
-        return base.GetSaveContent();
     }
 
     protected override void OnDataIsValidChanged(bool isValid)
@@ -109,49 +89,19 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     // There is not benefit of prematurely calculating all the other data until the number of components is manually set after looking at the scree plot
     protected override async Task<bool> Update(CancellationToken cancellationToken)
     {
-        if (await GetEigenvalueResults(cancellationToken) is { } results)
-        {
-            EigenvalueResults = results;
-            NoiseEigenvalueResults = PcaCalculator.GetNoiseEigenvalues(
-                results.Evals,
-                Properties.Gaps,
-                (int)Properties.Significance,
-                Properties.Refine);
-            return true;
-        }
-        return false;
-    }
-
-    private async Task<EigenvalueResults?> GetEigenvalueResults(CancellationToken cancellationToken)
-    {
         if (await Resources.GetIonData(cancellationToken: cancellationToken) is not { } ionData)
         {
-            return null;
+            return false;
         }
 
         var gridNode = Resources.GetGrid();
         if (gridNode is null || await gridNode.GetDataAsync<IGrid3DData>(cancellationToken: cancellationToken) is not { } gridData)
         {
-            return null;
+            return false;
         }
 
-        return PcaCalculator.GetEignevalues(
-            ionData,
-            gridData);
-    }
-
-    [RelayCommand(CanExecute = nameof(UpdateRankEstimationCanExecute))]
-    public async Task UpdateRankEstimation(CancellationToken cancellationToken)
-    {
-        var eigenvalueResults = EigenvalueResults ??= await GetEigenvalueResults(cancellationToken);
-        if (eigenvalueResults is not null)
-        {
-            NoiseEigenvalueResults = PcaCalculator.GetNoiseEigenvalues(
-                eigenvalueResults.Evals,
-                Properties.Gaps,
-                (int)Properties.Significance,
-                Properties.Refine);
-        }
+        EigenvalueResults = PcaCalculator.GetEignevalues(ionData, gridData);
+        return true;
     }
 
     // After setting the number of components, the components data can be computed. We can follow up with the current
@@ -180,7 +130,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         compResults.PhaseIDResults = phaseIDResults;
 
         ComponentsResults = compResults;
-        
+
         UpdateOptionsBounds();
 
         // Ensure that the selected component falls in the valid range of number of components
@@ -270,20 +220,18 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     // Updates the noise eigenvalues tab plot when the computed eigenvalue data changes
     partial void OnEigenvalueResultsChanged(EigenvalueResults? value)
     {
-        EigenvalueRenderData.Clear();
+        NoiseEigenValues = Array.Empty<IRenderData>();
         if (EigenvalueResults is not { Evals: { } evals })
         {
             return;
         }
         var positions = evals.Select((value, index) => new Vector3(index, 0f, value)).ToArray();
         var series = Resources.ChartObjects.CreateSeries();
-        series.Name = "Eigenvalues";
         series.Positions = positions;
         series.Color = Colors.Blue;
         series.MarkerShape = MarkerShape.Circle;
         series.MarkerColor = Colors.Blue;
-
-        EigenvalueRenderData.Add(series);
+        NoiseEigenValues = new IRenderData[] { series };
     }
 
     // Updates the components 3D plots when the component data (derived from selected number of components) changes
@@ -297,31 +245,6 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
             scores[i] = phaseIdResults.PhaseForVoxel(voxelIndex) == compIndex ? 1.0f : 0.0f ;
         }
         return scores;
-    }
-    
-    partial void OnNoiseEigenvalueResultsChanged(NoiseEigenvalueResults? value)
-    {
-        if (NoiseEigenvalueResults is { Rank: int rank, NoiseEvals: float[] noiseEvals })
-        {
-            if (Properties.Components == 0)
-            {
-                Properties.Components = rank;
-            }
-            if (EigenvalueRenderData.FirstOrDefault(x => x.Name == "Noise Eigenvalues") is { } noiseEigenvalues)
-            {
-                EigenvalueRenderData.Remove(noiseEigenvalues);
-            }
-            var noisePositions = Enumerable.Range(rank, noiseEvals.Length)
-                .Select(index => new Vector3(index, 0f, noiseEvals[index - rank]))
-                .ToArray();
-            var noiseSeries = Resources.ChartObjects.CreateSeries();
-            noiseSeries.Name = "Noise Eigenvalues";
-            noiseSeries.Positions = noisePositions;
-            noiseSeries.Color = Colors.Red;
-            noiseSeries.MarkerShape = MarkerShape.None;
-
-            EigenvalueRenderData.Add(noiseSeries);
-        }
     }
 
     // Updates the components 3D plots when the component data (derived from selected number of components) changes
@@ -341,10 +264,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         int numComponents = Properties.Components;
         int selectedIndex = Properties.ComponentIndex;
 
-        var jitterStdDev = optionsAccessor.GetOptions<PcaGlobalOptions>().JitterStdDev;
-
         var newComponentsData = new IRenderData[numComponents];
-        IValuePointsRenderData? rootValuePoints = null;
         for (int compIndex = 0; compIndex < numComponents; compIndex++)
         {
             var scores = components[compIndex].Scores;
@@ -357,99 +277,11 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
             var valuePoints = Resources.ChartObjects.CreateValuePoints();
             valuePoints.Name = $"Component {compIndex}";
             valuePoints.PositionsWithValues = positionsWithValues;
-            if (rootValuePoints is null)
-            {
-                rootValuePoints = valuePoints;
-                rootValuePoints.ColorMap = DeserializeColorMap(Properties.ColorMap);
-            }
-            else
-            {
-                valuePoints.ColorMap = rootValuePoints.ColorMap;
-            }
+            valuePoints.ColorMap = Resources.ColorMap.GetPresetColorMap(ColorMapPreset.Plasma);
 
             newComponentsData[compIndex] = valuePoints;
         }
-
-        if (rootValuePoints?.ColorMap is not null)
-        {
-            ColorMap = rootValuePoints.ColorMap;
-            var range = GetRange(components.Select(x => x.Scores));
-            ColorMap.BottomValue = range.Low;
-            ColorMap.TopValue = range.High;
-        }
-
         ComponentRenderData = newComponentsData;
-    }
-
-    private static (float Low, float High) GetRange(IEnumerable<float[]> scores)
-    {
-        // Flatten scores to single array
-        var size = scores.Sum(x => x.Length);
-        float[] allScores = new float[size];
-        int offset = 0;
-        foreach (var componentScores in scores)
-        {
-            int srcSize = componentScores.Length;
-            Array.Copy(componentScores, 0, allScores, offset, srcSize);
-            offset += srcSize;
-        }
-
-        // Get range
-        float mean = allScores.Average();
-        float stdDev = MathF.Sqrt(allScores.Average(v => MathF.Pow(v - mean, 2)));
-
-        return new (mean - 2 * stdDev, mean + 2 * stdDev);
-    }
-
-    private IColorMap GetColorMap(IValuePointsRenderData? rootValuePoints)
-    {
-        if (rootValuePoints?.ColorMap is not null)
-        {
-            return rootValuePoints.ColorMap;
-        }
-        return Resources.ColorMap.CreateColorMap();
-    }
-
-    private IColorMap DeserializeColorMap(SerializableColorMap? serializedColorMap)
-    {
-        if (serializedColorMap is not null)
-        {
-            var colorMap = Resources.ColorMap.CreateColorMap(
-                serializedColorMap.Bottom,
-                serializedColorMap.NanColor,
-                serializedColorMap.OutOfRangeBottom,
-                serializedColorMap.OutOfRangeTop,
-                serializedColorMap.Top,
-                serializedColorMap.ColorStops.Select(x =>
-                    Resources.ColorMap.CreateColorStop(x.RelativePosition, x.TopColor, x.BottomColor)));
-            colorMap.BottomValue = serializedColorMap.BottomValue;
-            colorMap.TopValue = serializedColorMap.TopValue;
-            return colorMap;
-        }
-        else
-        {
-            var preset = optionsAccessor.GetOptions<PcaGlobalOptions>().ColorMapPreset;
-            return Resources.ColorMap.GetPresetColorMap(preset);
-        }
-    }
-    private SerializableColorMap SerializeColorMap(IColorMap colorMap)
-    {
-        return new SerializableColorMap
-        {
-            OutOfRangeTop = colorMap.OutOfRangeTop,
-            Top = colorMap.Top,
-            NanColor = colorMap.NanColor,
-            Bottom = colorMap.Bottom,
-            OutOfRangeBottom = colorMap.OutOfRangeBottom,
-            ColorStops = colorMap.ColorStops.Select(x => new SerializableColorStop
-            {
-                TopColor = x.TopColor,
-                RelativePosition = x.RelativePosition,
-                BottomColor = x.BottomColor,
-            }).ToList(),
-            BottomValue = colorMap.BottomValue,
-            TopValue = colorMap.TopValue,
-        };
     }
 
     // Updates readonly Min/Max properties so the bounds are displayed in the Properties panel 
@@ -570,7 +402,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         DataStateIsValid = true;
     }
     */
-    
+
     // On Properties panel changes, some data must be invalidated to be recomputed with new values. Invalidations depend on the properties changed
     protected override void OnPropertiesChanged(PropertyChangedEventArgs e)
     {
@@ -580,10 +412,6 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         switch (e.PropertyName)
         {
             case nameof(PcaProperties.Components):
-                if (Properties.Components == 0)
-                {
-                    NoiseEigenvalueResults = null;
-                }
                 InvalidateComponents();
                 break;
             case nameof(PcaProperties.ComponentIndex):
@@ -615,11 +443,6 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
 
     private void InvalidateComponents()
     {
-        if (ColorMap is not null)
-        {
-            Properties.ColorMap = SerializeColorMap(ColorMap);
-            ColorMap = null;
-        }
         ComponentsResults = null;
         InvalidateSelectedComponent();
     }
