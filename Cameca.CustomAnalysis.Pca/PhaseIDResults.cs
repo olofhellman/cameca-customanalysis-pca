@@ -8,30 +8,30 @@ using System;
 // or 0 if no phase is identified
 public class PhaseIdResults
 {
-    Dictionary<int, int> identifiedPhase; 
+    Dictionary<VoxelID, int> identifiedPhase; 
 
-    public PhaseIdResults(List<int> voxelIndices, int maxIndex)
+    public PhaseIdResults(List<VoxelID> voxelIds)
     {
-        identifiedPhase = new Dictionary<int, int>();
+        identifiedPhase = new Dictionary<VoxelID, int>();
         // not-yet-identified voxels are identified as 0
-        for (int i = 0; i < voxelIndices.Count; ++i)
+        for (int i = 0; i < voxelIds.Count; ++i)
         {
-            identifiedPhase[voxelIndices[i]] = 0;
+            identifiedPhase[voxelIds[i]] = 0;
         }
     }
 
-    public void IdentifyVoxelAs(int voxelId, int phase)
+    public void IdentifyVoxelAs(VoxelID voxelId, int phase)
     {
         identifiedPhase[voxelId] = phase;
     }    
-    public void IdentifyVoxelsAs(List<int> voxelIds, int phase)
+    public void IdentifyVoxelsAs(List<VoxelID> voxelIds, int phase)
     {
-        foreach (int voxelId in voxelIds) {
+        foreach (VoxelID voxelId in voxelIds) {
             identifiedPhase[voxelId] = phase;
         }
     }
 
-    public int? PhaseForVoxel(int voxelId)
+    public int? PhaseForVoxel(VoxelID voxelId)
     {
         if (identifiedPhase.ContainsKey(voxelId))
         {
@@ -40,10 +40,20 @@ public class PhaseIdResults
         return null;
     }
 
-    public List<int> UnidentifiedVoxels()
+    public int? PhaseForVoxelIntValue(int voxelIndex)
     {
-        var unidentifiedIndices = new List<int>();
-        foreach ( KeyValuePair<int, int> voxel in identifiedPhase )
+        VoxelID voxelId = new VoxelID(voxelIndex);
+        if (identifiedPhase.ContainsKey(voxelId))
+        {
+            return identifiedPhase[voxelId];
+        }
+        return null;
+    }
+
+    public List<VoxelID> UnidentifiedVoxels()
+    {
+        var unidentifiedIndices = new List<VoxelID>();
+        foreach ( KeyValuePair<VoxelID, int> voxel in identifiedPhase )
         {
             if (voxel.Value == 0) {
                 unidentifiedIndices.Add(voxel.Key);

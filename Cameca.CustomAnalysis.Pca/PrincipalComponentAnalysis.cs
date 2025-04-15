@@ -242,7 +242,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         for (int i = 0; i < numIndices; ++i)
         {
             int voxelIndex = voxelIndices[i];
-            scores[i] = phaseIdResults.PhaseForVoxel(voxelIndex) == compIndex ? 1.0f : 0.0f ;
+            scores[i] = phaseIdResults.PhaseForVoxelIntValue(voxelIndex) == compIndex ? 1.0f : 0.0f ;
         }
         return scores;
     }
@@ -334,10 +334,10 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
             var positions = chunk.ReadSectionData<Vector3>(IonDataSectionName.Position);
             for (int chunkIndex = 0; chunkIndex < chunk.Length; chunkIndex++)
             {
-                var bin = binner.ToVoxel(positions.Span[chunkIndex]);
+                int bin = binner.ToVoxel(positions.Span[chunkIndex]);
 
                 // Properties.ComponentIndex is the selectedComponent
-                if (phaseIds.PhaseForVoxel(bin) == componentOfInterest) 
+                if (phaseIds.PhaseForVoxelIntValue(bin) == componentOfInterest) 
                 // if (scoredVoxels.TryGetValue(bin, out float score) && score >= threshold)
                 {
                     buffer.Span[bufferIndex++] = index;

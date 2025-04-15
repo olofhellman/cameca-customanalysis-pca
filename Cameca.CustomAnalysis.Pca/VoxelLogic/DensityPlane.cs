@@ -1,11 +1,10 @@
 
 using System;
 using System.IO;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using static System.Formats.Asn1.AsnWriter;
+
 
 public struct PixelID : IComparable<PixelID>
 {

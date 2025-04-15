@@ -3,8 +3,8 @@ using System.Diagnostics;
 using System.Linq;
 using System;
 using System.IO;
- 
- 
+
+
 // PcaScoresGrid represents a three dimensional grid containing the PCA scores for a collection of voxels
 // PcaScoresGrid is initialized with the size of the grid in x y and z, so that it can then map 
 // a particular [x,y,z] grid coordinate to an index (and back) 
@@ -15,89 +15,107 @@ using System.IO;
 
 public interface IScoresProvider
 {
-    public float[] GetScores(int voxelIndex);
+    public (VoxelID, float[]) GetIDAndScores(int voxelIndex);
 }
 public class PcaScoresGrid
 {
-    Dictionary<int, PcaVoxel> pcaVoxels; // the key is the 'id' for the voxel, from which you can
+    Dictionary<VoxelID, PcaVoxel> pcaVoxels; // the key is the 'id' for the voxel, from which you can
                                          // calculate the x,y,z position of the voxel on the grid if
                                          // the grid dimensions are known
 
     int scoreDims;
-    int xDim;
-    int yDim;
-    int zDim;
+    ThreeDGridDimensions gridDims;
     int nVoxels;
 
-    int VoxelIndexFor(GridCoord gridCoord)
+    public VoxelID VoxelIDFor(ThreeDGridCoord gridCoord)
     {
-        return gridCoord.x + (gridCoord.y * xDim) + (gridCoord.z * xDim * yDim);
+        return gridCoord.VoxelIdFor(gridDims);
     }
 
-    GridCoord GridCoordFor(int voxelIndex)
+    public ThreeDGridCoord GridCoordFor(VoxelID voxelId)
     {
-        int zOffset = xDim * yDim;
-        int yOffset = xDim;
-        int zCoord = voxelIndex / zOffset;
-        int rem = voxelIndex % zOffset;
-        int yCoord = rem / yOffset;
-        rem = rem % yOffset;
-        int xCoord = rem;
-        return new GridCoord(xCoord, yCoord, zCoord);
+        return voxelId.GridCoordFor(gridDims);
     }
 
     // returns a list of 27 indices, unless the voxel is near the edge
-    List<int> NeighborIndicesFor(GridCoord gridCoord)
+    // note: also includes self
+    List<VoxelID> NeighborIDsFor(ThreeDGridCoord gridCoord)
     {
-        List<int> neighborIndices = new List<int>();
-        //List<int> xIndices = new List<int>();
-        //List<int> yIndices = new List<int>();
-        //List<int> zIndices = new List<int>();
+        List<VoxelID> neighborIndices = new List<VoxelID>();
+
         int minx = Math.Max(0, gridCoord.x - 1);
-        int maxx = Math.Min(xDim - 1, gridCoord.x + 1);
+        int maxx = Math.Min(gridDims.x - 1, gridCoord.x + 1);
         int miny = Math.Max(0, gridCoord.y - 1);
-        int maxy = Math.Min(yDim - 1, gridCoord.y + 1);
+        int maxy = Math.Min(gridDims.y - 1, gridCoord.y + 1);
         int minz = Math.Max(0, gridCoord.z - 1);
-        int maxz = Math.Min(zDim - 1, gridCoord.z + 1);
+        int maxz = Math.Min(gridDims.z - 1, gridCoord.z + 1);
         for (int z = minz; z <= maxz; ++z)
         {
             for (int y = miny; y <= maxy; ++y)
             {
                 for (int x = minx; x <= maxx; ++x)
                 {
-                    neighborIndices.Add(x + (y * xDim) + (z * xDim * yDim));
+                    VoxelID voxelId = new VoxelID(x + (y * gridDims.x) + (z * gridDims.xy));
+                    neighborIndices.Add(voxelId);
                 }
             }
         }
         return neighborIndices;
     }
-    public PcaScoresGrid(IScoresProvider scoresProvider, List<int> voxelIndices, int scoreDimensions, int[] gridDimensions)
+
+    public PcaScoresGrid(IScoresProvider scoresProvider, int nIndices, int scoreDimensions, ThreeDGridDimensions gridDimensions)
     {
         scoreDims = scoreDimensions;
 
-        pcaVoxels = pcaVoxelsInit(scoresProvider, voxelIndices, gridDimensions);
+        pcaVoxels = pcaVoxelsInit(scoresProvider, nIndices);
 
-        xDim = gridDimensions[0];
-        yDim = gridDimensions[1];
-        zDim = gridDimensions[2];
-
-        nVoxels = xDim * yDim * zDim;
+        nVoxels = gridDimensions.NumVoxels();
     }
 
-    static Dictionary<int, PcaVoxel> pcaVoxelsInit(IScoresProvider scoresProvider, List<int> voxelIndices, int[] gridDimensions)
+    static Dictionary<VoxelID, PcaVoxel> pcaVoxelsInit(IScoresProvider scoresProvider, int nIndices)
     {
-        var voxels = new Dictionary<int, PcaVoxel>();
-        int nIndices = voxelIndices.Count;
+        var voxels = new Dictionary<VoxelID, PcaVoxel>();
 
         for (int i = 0; i < nIndices; ++i)
         {
-            float[] nthVector = scoresProvider.GetScores(i);
+            float[] nthVector;
+            VoxelID voxelId;
+            
+            (voxelId, nthVector) = scoresProvider.GetIDAndScores(i);
 
-            var pcaVoxel = new PcaVoxel(voxelIndices[i], nthVector);
-            voxels[voxelIndices[i]] = pcaVoxel;
+            var pcaVoxel = new PcaVoxel(voxelId, nthVector);
+            voxels[voxelId] = pcaVoxel;
         }
 
         return voxels;
+    }
+
+    // When assigning each voxel to a phase based on which peak it might be in,
+    // We want to avoid mapping each pixel to a peak more than once
+    // SO, first  put all the voxels into a different list corresponding to each pixel
+    // then we can do the lookup once and assign all the voxels from that pixel to 
+    // the same phase
+    Dictionary<PixelID, List<VoxelID>> aggregateVoxelsIntoListsPerPixel(List<VoxelID> voxelIds, DensityPlane grid, Dictionary<VoxelID, PcaVoxel> pcaVoxels)
+    {
+        // For each voxel, assign the voxel to the List corresponding with its pixel
+        Dictionary<PixelID, List<VoxelID>> voxelLists = new Dictionary<PixelID, List<VoxelID>>();
+        foreach (VoxelID voxelId in voxelIds)
+        {
+            PcaVoxel voxel = pcaVoxels[voxelId];
+            PixelID nthPixelId = grid.PixelIDFor(voxel.scoreVector[0], voxel.scoreVector[1]);
+            List<VoxelID>? voxelIDListForGridCoord;
+            if (voxelLists.TryGetValue(nthPixelId, out voxelIDListForGridCoord))
+            {
+                voxelIDListForGridCoord.Add(voxelId);
+            }
+            else
+            {
+                voxelIDListForGridCoord = new List<VoxelID>();
+                voxelIDListForGridCoord.Add(voxelId);
+                voxelLists[nthPixelId] = voxelIDListForGridCoord;
+            }
+        }
+        return voxelLists;
     }
 
     // GetPhasesStrategyC is produces PhaseIdResults based on the first two 
@@ -111,15 +129,14 @@ public class PcaScoresGrid
     // C) assign voxels with PCA scores in each peak to the corresponding phase
     public PhaseIdResults GetPhasesStrategyC()
     {
-        List<int> voxelIndices = pcaVoxels.Keys.ToList();
+        List<VoxelID> voxelIds = pcaVoxels.Keys.ToList();
 
-        PhaseIdResults phaseIdResults = new PhaseIdResults(voxelIndices, nVoxels);
+        PhaseIdResults phaseIdResults = new PhaseIdResults(voxelIds);
 
         float binSeparation = 0.5f;
         int gridDims = Math.Min(2, this.scoreDims); // 2 is the simplest choice 
         Dictionary<int, DensityPlane> twoDGrids = new Dictionary<int, DensityPlane>();
         Dictionary<int, List<List<PixelID>>> partitions = new Dictionary<int, List<List<PixelID>>>();
-        
         
         // now, make twoD grids using all pairs of dimensions
         // yes, GetPhasesStrategyC only uses 2 dimensions, so these loops are useless, 
@@ -131,11 +148,11 @@ public class PcaScoresGrid
                 int gridId = 10 * i + j;
                 
                 // this makes the 2D grid  --  step A) above
-                var twoDGrid = CalculateTwoDDensity(voxelIndices, i, j, binSeparation);
+                var twoDGrid = CalculateTwoDDensity(voxelIds, i, j, binSeparation);
                 twoDGrids[gridId] = twoDGrid;
                 
                 // this identifies the peaks --  step B) above
-                List<List<PixelID>> partitionedIndices = IdentifyPartitions(twoDGrid, i, j, voxelIndices);
+                List<List<PixelID>> partitionedIndices = IdentifyPartitions(twoDGrid, i, j);
                 partitions[gridId] = partitionedIndices;
             }
         }
@@ -195,25 +212,8 @@ public class PcaScoresGrid
             }
             */
             // end of debug dump
-            
-            // For each voxel, assign the voxel to the List corresponding with its pixel
-            Dictionary<PixelID, List<int>> voxelLists = new Dictionary<PixelID, List<int>>();
-            foreach (int voxelId in voxelIndices)
-            {
-                PcaVoxel voxel = pcaVoxels[voxelId];
-                PixelID nthPixelId = grid.PixelIDFor(voxel.scoreVector[0], voxel.scoreVector[1]);
-                List<int>? voxelIDListForGridCoord;
-                if (voxelLists.TryGetValue(nthPixelId, out voxelIDListForGridCoord))
-                {
-                    voxelIDListForGridCoord.Add(voxelId);
-                }
-                else
-                {
-                    voxelIDListForGridCoord = new List<int>();
-                    voxelIDListForGridCoord.Add(voxelId);
-                    voxelLists[nthPixelId] = voxelIDListForGridCoord;
-                }
-            }
+
+            Dictionary<PixelID, List<VoxelID>> voxelLists = aggregateVoxelsIntoListsPerPixel(voxelIds, grid, pcaVoxels);
 
             // now, each voxelIndex is a member of one of the lists in voxelLists
             // go through each list in voxelLists and see if its pixel is designated in a particular partiion
@@ -226,8 +226,8 @@ public class PcaScoresGrid
                 foreach (PixelID pixelID in pixelIdList)
                 {
                     // Lookup for all the voxels bucketed under this pixelId
-                    List<int> voxelIds = voxelLists[pixelID];
-                    foreach (int voxelId in voxelIds)
+                    List<VoxelID> voxelIdsForThisPixel = voxelLists[pixelID];
+                    foreach (VoxelID voxelId in voxelIdsForThisPixel)
                     {
                         phaseIdResults.IdentifyVoxelAs(voxelId, listN);
                     }
@@ -244,8 +244,8 @@ public class PcaScoresGrid
             foreach (PixelID pixelID in unassignedPixels)
             {
                 // Lookup for all the voxels bucketed under this pixelId
-                List<int> voxelIds = voxelLists[pixelID];
-                foreach (int voxelId in voxelIds)
+                List<VoxelID> voxelIdsForThisPixel = voxelLists[pixelID];
+                foreach (VoxelID voxelId in voxelIdsForThisPixel)
                 {
                     phaseIdResults.IdentifyVoxelAs(voxelId, 0);
                 }
@@ -262,7 +262,7 @@ public class PcaScoresGrid
     // If it does, add it to the appropriate list
     // return the list of lists
     // indices not identified are not returned in any list
-    public List<List<PixelID>> IdentifyPartitions(DensityPlane twoDGrid, int dimX, int dimy, List<int> voxelIndices)
+    public List<List<PixelID>> IdentifyPartitions(DensityPlane twoDGrid, int dimX, int dimy)
     {
         // to identify the first maximum, just find the pixel with the highest value
         // then, accumulate neighboring pixels, avoiding neighbors with higher values
@@ -283,13 +283,13 @@ public class PcaScoresGrid
         return pixelLists;
     }
 
-    public DensityPlane CalculateTwoDDensity(List<int> voxelIndices, int dimx, int dimy, float binsize)
+    public DensityPlane CalculateTwoDDensity(List<VoxelID> voxelIds, int dimx, int dimy, float binsize)
     {
         DensityPlane densityPlane = new DensityPlane(binsize);
-        for (int v = 0; v < voxelIndices.Count; ++v)
+        for (int v = 0; v < voxelIds.Count; ++v)
         {
-            int voxelIndex = voxelIndices[v];
-            var voxel = pcaVoxels[voxelIndex];
+            VoxelID voxelId = voxelIds[v];
+            var voxel = pcaVoxels[voxelId];
             var xVal = voxel.scoreVector[dimx];
             var yVal = voxel.scoreVector[dimy];
             densityPlane.AddPointAt(xVal, yVal);
@@ -314,7 +314,7 @@ public class PcaScoresGrid
 	// float binSeparation = 0.5f;
 	// List<DensityProfile> oneDDensities = CalculateOneDDensities(voxelIndices, binSeparation);
 
-    public List<DensityProfile> CalculateOneDDensities(List<int> voxelIndices, float binsize)
+    public List<DensityProfile> CalculateOneDDensities(List<VoxelID> voxelIds, float binsize)
     {
         List<DensityProfile> densities = new List<DensityProfile>();
         for (int i = 0; i < this.scoreDims; ++i)
@@ -323,9 +323,9 @@ public class PcaScoresGrid
             densities.Add(nthDensityList);
         }
 
-        for (int v = 0; v < voxelIndices.Count; ++v)
+        for (int v = 0; v < voxelIds.Count; ++v)
         {
-            int voxelIndex = voxelIndices[v];
+            VoxelID voxelIndex = voxelIds[v];
             var voxel = pcaVoxels[voxelIndex];
             for (int i = 0; i < this.scoreDims; ++i)
             {

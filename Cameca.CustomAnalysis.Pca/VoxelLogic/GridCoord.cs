@@ -17,21 +17,59 @@ public struct TwoDGridCoord
     {
         Console.WriteLine(prefix + this.x, ", ", + this.y);
     }
-}; 
+};
+
+// ThreeDGridDimensions represents the size of a voxel grid -- 
+// To specify a specific voxel in the grid, use a ThreeDGridCoord instead
+public struct ThreeDGridDimensions
+{
+    public int x;
+    public int y;
+    public int z;
+    public int xy;  // we often use this product, so multiple once and use that
+    public int xyz;  // this is the number of voxels
+
+    public ThreeDGridDimensions(int x, int y, int z)
+    {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        int xy = x * y;
+        this.xy = xy;
+        this.xyz = xy * z;
+    }
+
+    public void ToConsole(string prefix)
+    {
+        Console.WriteLine(prefix + this.x, ", ", +this.y, ", ", +this.z);
+    }
+
+    public int NumVoxels()
+    {
+        return this.xyz; 
+    }
+}
 
 // GridCoord is a triplet of integers identifying a point on a Three Dimensional grid
-public struct GridCoord
+public struct ThreeDGridCoord
 {
     public int x;
     public int y;
     public int z;
 
-    public GridCoord(int x, int y, int z)
+    public ThreeDGridCoord(int x, int y, int z)
     {
         this.x = x;
         this.y = y;
         this.z = z;
     }
+
+    public VoxelID VoxelIdFor(ThreeDGridDimensions gridDims)
+    {
+        int voxelId = x + (y * gridDims.x) + (z * gridDims.xy);
+        return new VoxelID(voxelId);
+    }
+
     public void ToConsole(string prefix)
     {
         Console.WriteLine(prefix + this.x, ", ", +this.y, ", ", +this.z);
