@@ -301,7 +301,47 @@ public class PcaScoresGrid
 
         return phaseIdResults;
     }
+    internal void DumpPartitions(List<List<PixelID>> partitions, string gridId)
+    {
+        string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string outputFilename = System.IO.Path.Combine(docPath, "PcaPeakPartitions" + gridId + ".txt");
+        // int peakIndex = 1;
+        using (StreamWriter outputFile = new StreamWriter(outputFilename))
+        {
+            outputFile.Write("peakCoords = {");
+            bool firstPeak = true;
+            foreach (List<PixelID> partition in partitions)
+            {
+                if (!firstPeak)
+                {
+                    outputFile.Write(",");
+                }
+                else
+                {
+                    firstPeak = false;
+                }
+                outputFile.Write("{");
+                bool firstCoord = true;
+                foreach ( PixelID pixelId in partition )
+                {
+                    (int x, int y) = pixelId.xyCoords();
+                    if (!firstCoord) {
+                        outputFile.Write(","); 
+                    } 
+                    else
+                    {
+                        firstCoord = false;
+                    }
+                    outputFile.Write("{" + x + "," + y + "}");
+                }
+                outputFile.WriteLine("}¬\n");
+               //  peakIndex += 1;
+            }
 
+            outputFile.Write("}");
+            outputFile.Close();
+        }
+    }
     // GetPhasesStrategyD is produces PhaseIdResults based on the first three 
     // PCA dimensions only  
     //
@@ -358,7 +398,8 @@ public class PcaScoresGrid
                 // this identifies the peaks --  step B) above
                 List<List<PixelID>> partitionedIndices = IdentifyPartitions(twoDGrid, i, j);
                 partitions[gridId] = partitionedIndices;
-
+                DumpPartitions(partitionedIndices, gridId);
+                
                 // now label each voxel with a PCA code based on its peak association
                 // for each grid, group the voxels into lists per pixel, then, knowing
                 // which peaks contain which pixels, add the voxels PCA code for that grid to its entry in 

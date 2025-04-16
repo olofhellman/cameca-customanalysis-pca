@@ -4,6 +4,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 
 public struct PixelID : IComparable<PixelID>
@@ -106,33 +107,32 @@ public class DensityPlane
     {
         return data.Keys.ToList();
     }
-    
+
+    internal void AddIfPossible(int x, int y, List<PixelID> list)
+    {
+        PixelID possibleBin = new PixelID(x, y);
+        if (data.ContainsKey(possibleBin))
+        {
+            list.Add(possibleBin);
+        }
+    }
+
+    // check for the 8 neighboring pixels and add them if they have a non-zero value
     public List<PixelID> PixelIdsNeighboring(PixelID pixelId)
     {
-        int x;
-        int y;
-        (x, y) = pixelId.xyCoords();
+        //int x;
+        //int y;
+        (int x, int y) = pixelId.xyCoords();
         List<PixelID> neighbors = new List<PixelID>();
-        PixelID neighborBin = new PixelID(x - 1, y);
-        if (data.ContainsKey(neighborBin))
-        {
-            neighbors.Add(neighborBin);
-        }
-		neighborBin = new PixelID(x + 1, y);
-		if (data.ContainsKey(neighborBin))
-		{
-			neighbors.Add(neighborBin);
-		}
-		neighborBin = new PixelID(x, y - 1);
-		if (data.ContainsKey(neighborBin))
-		{
-			neighbors.Add(neighborBin);
-		}
-		neighborBin = new PixelID(x, y + 1);
-		if (data.ContainsKey(neighborBin))
-		{
-			neighbors.Add(neighborBin);
-		}
+        AddIfPossible(x - 1, y - 1, neighbors);
+        AddIfPossible(x - 1, y, neighbors);
+        AddIfPossible(x - 1, y + 1, neighbors);
+        AddIfPossible(x, y-1, neighbors);
+        AddIfPossible(x, y+1, neighbors);
+        AddIfPossible(x + 1, y-1, neighbors);
+        AddIfPossible(x + 1, y, neighbors);
+        AddIfPossible(x + 1, y + 1, neighbors);
+
 		return neighbors;
 	}
 	
