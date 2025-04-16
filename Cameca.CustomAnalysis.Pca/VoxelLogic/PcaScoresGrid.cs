@@ -3,6 +3,10 @@ using System.Diagnostics;
 using System.Linq;
 using System;
 using System.IO;
+using System.Windows.Controls;
+using System.Collections;
+using System.Windows.Input;
+using System.Text;
 
 
 // PcaScoresGrid represents a three dimensional grid containing the PCA scores for a collection of voxels
@@ -37,6 +41,16 @@ public class PcaScoresGrid
         return voxelId.GridCoordFor(gridDims);
     }
 
+    // really just the ASCII value of the first character
+    internal int ASCIIValueForChar(char s)
+    {
+        return (int)s;
+    }
+
+    internal char CharValueForASCII(int a)
+    {
+        return (char)a;  
+    }
     // returns a list of 27 indices, unless the voxel is near the edge
     // note: also includes self
     List<VoxelID> NeighborIDsFor(ThreeDGridCoord gridCoord)
@@ -95,14 +109,14 @@ public class PcaScoresGrid
     // SO, first  put all the voxels into a different list corresponding to each pixel
     // then we can do the lookup once and assign all the voxels from that pixel to 
     // the same phase
-    Dictionary<PixelID, List<VoxelID>> aggregateVoxelsIntoListsPerPixel(List<VoxelID> voxelIds, DensityPlane grid, Dictionary<VoxelID, PcaVoxel> pcaVoxels)
+    Dictionary<PixelID, List<VoxelID>> aggregateVoxelsIntoListsPerPixel(List<VoxelID> voxelIds, DensityPlane grid, Dictionary<VoxelID, PcaVoxel> pcaVoxels, int firstDim, int secondDim)
     {
         // For each voxel, assign the voxel to the List corresponding with its pixel
         Dictionary<PixelID, List<VoxelID>> voxelLists = new Dictionary<PixelID, List<VoxelID>>();
         foreach (VoxelID voxelId in voxelIds)
         {
             PcaVoxel voxel = pcaVoxels[voxelId];
-            PixelID nthPixelId = grid.PixelIDFor(voxel.scoreVector[0], voxel.scoreVector[1]);
+            PixelID nthPixelId = grid.PixelIDFor(voxel.scoreVector[firstDim], voxel.scoreVector[secondDim]);
             List<VoxelID>? voxelIDListForGridCoord;
             if (voxelLists.TryGetValue(nthPixelId, out voxelIDListForGridCoord))
             {
@@ -117,7 +131,40 @@ public class PcaScoresGrid
         }
         return voxelLists;
     }
+    internal Dictionary<string, int> PcaCodeCounts(Dictionary<VoxelID, string> pcaCodes)
+    {
+        Dictionary<string, int> pcaCodeCounts = new Dictionary<string, int>();
+        foreach (string code in pcaCodes.Values)
+        {
+            if (pcaCodeCounts.ContainsKey(code))
+            {
+                pcaCodeCounts[code] += 1;
+            }
+            else
+            {
+                pcaCodeCounts[code] = 1;
+            }
+        }
+        return pcaCodeCounts;
+    }
+    internal void DumpPcaCodeCounts(Dictionary<string, int> pcaCodeCounts)
+    {
+        string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string outputFilename = System.IO.Path.Combine(docPath, "PcaCodeStats.txt");
 
+        using (StreamWriter outputFile = new StreamWriter(outputFilename))
+        {
+            List<string> sortedCodes = pcaCodeCounts.Keys.ToList();
+            sortedCodes.Sort();
+            outputFile.WriteLine("PcaCodeStats file");
+            foreach (string pcaCode in sortedCodes)
+            {
+                int count = pcaCodeCounts[pcaCode];
+                outputFile.WriteLine("Code: \t" + pcaCode + "\t Count:\t" + count);
+            }
+            outputFile.Close();
+        }
+    }
     // GetPhasesStrategyC is produces PhaseIdResults based on the first two 
     // PCA dimensions only (later strategies will incorporate more dimensions)
     //
@@ -213,7 +260,7 @@ public class PcaScoresGrid
             */
             // end of debug dump
 
-            Dictionary<PixelID, List<VoxelID>> voxelLists = aggregateVoxelsIntoListsPerPixel(voxelIds, grid, pcaVoxels);
+            Dictionary<PixelID, List<VoxelID>> voxelLists = aggregateVoxelsIntoListsPerPixel(voxelIds, grid, pcaVoxels, 0, 1);
 
             // now, each voxelIndex is a member of one of the lists in voxelLists
             // go through each list in voxelLists and see if its pixel is designated in a particular partiion
@@ -255,6 +302,142 @@ public class PcaScoresGrid
         return phaseIdResults;
     }
 
+    // GetPhasesStrategyD is produces PhaseIdResults based on the first three 
+    // PCA dimensions only  
+    //
+    // The strategy goes like this:
+    //
+    // A) make three 2D grids representing the density of voxels with PCA scores in 
+    //    each combination of the first three PCA dimensions 
+    //    in other words dim1xdim2,  dim1xdim3,  dim2xdim3
+    // B) identify peaks in each 2D grid -- each peak corresponds to a section of a PCA code
+    //      A1 is a code snippet representing the first peak of the first grid
+    //      A2 is a code snippet representing the second peak of the first grid  
+    //      B1 is a code snippet representing the first peak of the second grid    
+    //      B0 is a code snippet representing no association with any peak of the second grid
+    //      etc.
+    // C) look at all of the PCA codes of the form
+    //      AhBkCl
+    //    where h, k, and l are non-zero.  Regions of contiguous voxels that share 
+    //    the same code will be designated as the same phase 
+    // D) add voxels that abut any of the contiguous regions to those regions iff
+    //    the code they have matches all code snippet for which they have a non-zero number
+    //    i.e. A0B1C1  is a match for contiguous regions A1B1C1 and A2B1C1
+    public PhaseIdResults GetPhasesStrategyD()
+    {
+        List<VoxelID> voxelIds = pcaVoxels.Keys.ToList();
+
+        PhaseIdResults phaseIdResults = new PhaseIdResults(voxelIds);
+
+        float binSeparation = 0.5f;
+        int gridDims = Math.Min(3, this.scoreDims); // 3 for strategy D
+        Dictionary<string, DensityPlane> twoDGrids = new Dictionary<string, DensityPlane>();
+        Dictionary<string, List<List<PixelID>>> partitions = new Dictionary<string, List<List<PixelID>>>();
+        
+        // make a dictionary for the pcaCodes and fill with enpty Strings
+        Dictionary<VoxelID, string> pcaCodes = new Dictionary<VoxelID, string>();
+        foreach (VoxelID voxelId in voxelIds)
+        {
+            pcaCodes[voxelId] = "";
+        }
+
+        int AAsciiValue = ASCIIValueForChar('A');
+        int gridIndex = 0;
+        // now, make twoD grids using all pairs of dimensions
+        for (int i = 0; i < (gridDims - 1); ++i)
+        {
+            for (int j = i + 1; j < gridDims; ++j)
+            {
+                string gridLetter = CharValueForASCII(AAsciiValue + gridIndex).ToString();
+                string gridId = gridLetter + i.ToString() + j.ToString(); 
+
+                // this makes the 2D grid  --  step A) above
+                var twoDGrid = CalculateTwoDDensity(voxelIds, i, j, binSeparation);
+                twoDGrids[gridId] = twoDGrid;
+
+                // this identifies the peaks --  step B) above
+                List<List<PixelID>> partitionedIndices = IdentifyPartitions(twoDGrid, i, j);
+                partitions[gridId] = partitionedIndices;
+
+                // now label each voxel with a PCA code based on its peak association
+                // for each grid, group the voxels into lists per pixel, then, knowing
+                // which peaks contain which pixels, add the voxels PCA code for that grid to its entry in 
+                // the PCA code dictionary
+                int peakIndex = 1;
+                Dictionary<PixelID, List<VoxelID>> voxelLists = aggregateVoxelsIntoListsPerPixel(voxelIds, twoDGrid, pcaVoxels, i, j);
+                foreach (List<PixelID> pixelIdList in partitionedIndices)
+                {
+                    string pcaCode = gridLetter + peakIndex.ToString();
+                    // the pixelIdList contains a list of pixelIds identified as being part of the Nth partition
+                    foreach (PixelID pixelID in pixelIdList)
+                    {
+                        // Lookup for all the voxels bucketed under this pixelId
+                        List<VoxelID> voxelIdsForThisPixel = voxelLists[pixelID];
+                        foreach (VoxelID voxelId in voxelIdsForThisPixel)
+                        {
+                            pcaCodes[voxelId] = pcaCodes[voxelId] + pcaCode;
+                        }
+                        // remove that entry from voxelLists
+                        voxelLists.Remove(pixelID);
+                    }
+                    peakIndex += 1;
+                }
+
+                // now, all the remaining entries in voxelLists are unassigned :  
+                // assign these to component 0
+                string unassignedPcaCode = gridLetter + "0";
+                List<PixelID> unassignedPixels = voxelLists.Keys.ToList();
+                foreach (PixelID pixelID in unassignedPixels)
+                {
+                    // Lookup for all the voxels bucketed under this pixelId
+                    List<VoxelID> voxelIdsForThisPixel = voxelLists[pixelID];
+                    foreach (VoxelID voxelId in voxelIdsForThisPixel)
+                    {
+                        pcaCodes[voxelId] = pcaCodes[voxelId] + unassignedPcaCode;
+                    }
+                }
+                gridIndex += 1;
+            }
+        }
+
+        // now examine the groups of voxels to identify contiguous regions
+        // first, lets dump some info about populations of all the different 
+        // pca Codes:
+        Dictionary<string, int> pcaCodeCounts = PcaCodeCounts(pcaCodes);
+        DumpPcaCodeCounts(pcaCodeCounts);
+
+        // preliminary strategy D:
+        // just find the highest populated 4 buckets in pcaCodeCounts, assign those as 
+        // the first 4 components
+        // leave the voxel coagulation until later
+
+        // phaseIDResults has a method  IdentifyVoxelAs(int voxelIds, int phase)
+        List<KeyValuePair<string, int>> kvpList = pcaCodeCounts.ToList<KeyValuePair<string, int>>();
+        List<KeyValuePair<string, int>> sortedKvpList = kvpList.OrderByDescending(kvp => kvp.Value).ToList();
+        Dictionary<string, int> phaseAssignments = new Dictionary<string, int>();
+        int phase = 1;
+        foreach (KeyValuePair<string, int> kvp in sortedKvpList)
+        {
+            phaseAssignments[kvp.Key] = phase;
+            phase += 1;
+        }
+
+        // and, call IdentifyVoxelAs for each voxel
+        // now, all the remaining entries in voxelLists are unassigned :  
+        // assign these to component 0
+        foreach (VoxelID voxelId in voxelIds)
+        {
+            string pcaCode = pcaCodes[voxelId];
+            int voxelphase = phaseAssignments[pcaCode];
+            if (voxelphase > 4 )
+            {
+                voxelphase = 0;
+            }
+ 
+           phaseIdResults.IdentifyVoxelAs(voxelId, voxelphase);
+        }
+        return phaseIdResults;
+    }
     // identifyPartitions use the density map from the twoDGrid to separate 
     // voxels that belong to different peaks in the DensityPlane
     // first, identify the peaks and their associated pixels
@@ -277,7 +460,7 @@ public class PcaScoresGrid
         // associated with the different maxima
         TwoDGridPartitionFinder partitionFinder = new TwoDGridPartitionFinder(twoDGrid);
 
-        partitionFinder.FindPartitions(0.15f);
+        partitionFinder.FindPartitions(0.1f);
         var pixelLists = partitionFinder.GetPixelLists();
         partitionFinder.Clear();
         return pixelLists;

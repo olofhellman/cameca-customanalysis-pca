@@ -106,7 +106,7 @@ internal static class PcaCalculator
         PcaScoresGridProducer producer = new PcaScoresGridProducer(compResults);
 
         PcaScoresGrid scoresGrid = producer.ScoresGrid();
-        return scoresGrid.GetPhasesStrategyC();
+        return scoresGrid.GetPhasesStrategyD();
     }
 
     public static ComponentsResults GetComponents(IIonData ionData, IGrid3DData gridData, int nComponents)
