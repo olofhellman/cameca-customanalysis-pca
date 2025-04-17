@@ -50,7 +50,7 @@ public struct ThreeDGridDimensions
 
     public VoxelID VoxelIdFor(int p, int q, int r)
     {
-        int voxelId = p + (q * gridDims.x) + (r * gridDims.xy);
+        int voxelId = p + (q * x) + (r * xy);
         return new VoxelID(voxelId);
     }
 

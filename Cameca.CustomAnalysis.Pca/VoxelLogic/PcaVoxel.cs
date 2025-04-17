@@ -14,6 +14,7 @@ using Cameca.CustomAnalysis.Interface;
 
 public struct VoxelID : IComparable<VoxelID>
 {
+
     public int intValue;
 
     public VoxelID(int voxelId)
@@ -28,10 +29,11 @@ public struct VoxelID : IComparable<VoxelID>
 
     static VoxelID? VoxelIDIfPossible(ThreeDGridDimensions dims, int x, int y, int z)
     {
-        if (dims.VoxelExists(xyz))
+        if (dims.VoxelExists(x, y, z))
         {
             return new VoxelID(dims, x, y, z);
         }
+        return null;
     }
     static public List<VoxelID> ListFromIntArray(int[] integerIds)
     {
@@ -43,7 +45,7 @@ public struct VoxelID : IComparable<VoxelID>
         return newList;
     }
 
-    public (int, int, int) xyzCoordFor(ThreeDGridDimensions dims)
+    public (int, int, int) xyzCoordsFor(ThreeDGridDimensions dims)
     {
         int zOffset = dims.xy;
         int yOffset = dims.x;
@@ -60,7 +62,7 @@ public struct VoxelID : IComparable<VoxelID>
         int z = 0;
         int y = 0;
         int x = 0;
-        (x, y, z) = xyzCoordFor(dims);
+        (x, y, z) = xyzCoordsFor(dims);
         return new ThreeDGridCoord(x, y, z);
     }
 
@@ -69,7 +71,7 @@ public struct VoxelID : IComparable<VoxelID>
         return other.intValue > intValue ? -1 : other.intValue < intValue ? 1 : 0;
     }
 
-    internal addIfPossible(int x, int y, int z, ThreeDGridDimensions dims List<VoxelID> neighbors)
+    internal void AddIfPossible(int x, int y, int z, ThreeDGridDimensions dims, List<VoxelID> neighbors)
     {
         VoxelID? voxelId = VoxelID.VoxelIDIfPossible(dims, x, y, z);
         if (voxelId != null)
@@ -79,24 +81,23 @@ public struct VoxelID : IComparable<VoxelID>
     }
     public List<VoxelID> NeighborVoxels(ThreeDGridDimensions dims)
     {
-        (int x, int y, int z) = this.xyzCoords();
+        (int x, int y, int z) = this.xyzCoordsFor(dims);
         List<VoxelID> neighbors = new List<VoxelID>();
-        AddIfPossible(x - 1, y, z, neighbors);
-        AddIfPossible(x + 1, y, z, neighbors);
-        AddIfPossible(x, y - 1, z, neighbors);
-        AddIfPossible(x, y + 1, z, neighbors);
-        AddIfPossible(x, y, z - 1, neighbors);
-        AddIfPossible(x, y, z + 1, neighbors);
+        AddIfPossible(x - 1, y, z, dims, neighbors);
+        AddIfPossible(x + 1, y, z, dims, neighbors);
+        AddIfPossible(x, y - 1, z, dims, neighbors);
+        AddIfPossible(x, y + 1, z, dims, neighbors);
+        AddIfPossible(x, y, z - 1, dims, neighbors);
+        AddIfPossible(x, y, z + 1, dims, neighbors);
         return neighbors;
     }
-}
 
     public string DebugStr(ThreeDGridDimensions dims)
     {
         int z;
         int y;
         int x;
-        (x, y, z) = xyzCoordFor(dims);
+        (x, y, z) = xyzCoordsFor(dims);
         return intValue.ToString() + ":{" + x + "," + y + " + " + z + "}";
     }
 }
