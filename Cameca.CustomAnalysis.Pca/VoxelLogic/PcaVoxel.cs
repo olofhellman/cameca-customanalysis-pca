@@ -26,6 +26,13 @@ public struct VoxelID : IComparable<VoxelID>
         this.intValue = 0;
     }
 
+    static VoxelID? VoxelIDIfPossible(ThreeDGridDimensions dims, int x, int y, int z)
+    {
+        if (dims.VoxelExists(xyz))
+        {
+            return new VoxelID(dims, x, y, z);
+        }
+    }
     static public List<VoxelID> ListFromIntArray(int[] integerIds)
     {
         List<VoxelID> newList = new List<VoxelID>();
@@ -61,6 +68,28 @@ public struct VoxelID : IComparable<VoxelID>
     {
         return other.intValue > intValue ? -1 : other.intValue < intValue ? 1 : 0;
     }
+
+    internal addIfPossible(int x, int y, int z, ThreeDGridDimensions dims List<VoxelID> neighbors)
+    {
+        VoxelID? voxelId = VoxelID.VoxelIDIfPossible(dims, x, y, z);
+        if (voxelId != null)
+        {
+            neighbors.Add(voxelId.Value);
+        }
+    }
+    public List<VoxelID> NeighborVoxels(ThreeDGridDimensions dims)
+    {
+        (int x, int y, int z) = this.xyzCoords();
+        List<VoxelID> neighbors = new List<VoxelID>();
+        AddIfPossible(x - 1, y, z, neighbors);
+        AddIfPossible(x + 1, y, z, neighbors);
+        AddIfPossible(x, y - 1, z, neighbors);
+        AddIfPossible(x, y + 1, z, neighbors);
+        AddIfPossible(x, y, z - 1, neighbors);
+        AddIfPossible(x, y, z + 1, neighbors);
+        return neighbors;
+    }
+}
 
     public string DebugStr(ThreeDGridDimensions dims)
     {

@@ -43,6 +43,16 @@ public struct ThreeDGridDimensions
     {
         Console.WriteLine(prefix + this.x, ", ", +this.y, ", ", +this.z);
     }
+    public bool VoxelExists(int p, int q, int r)
+    {
+         return p >= 0 && q >= 0 && r >= 0 && p < x && q < y && r < z;
+    }
+
+    public VoxelID VoxelIdFor(int p, int q, int r)
+    {
+        int voxelId = p + (q * gridDims.x) + (r * gridDims.xy);
+        return new VoxelID(voxelId);
+    }
 
     public int NumVoxels()
     {
@@ -66,8 +76,7 @@ public struct ThreeDGridCoord
 
     public VoxelID VoxelIdFor(ThreeDGridDimensions gridDims)
     {
-        int voxelId = x + (y * gridDims.x) + (z * gridDims.xy);
-        return new VoxelID(voxelId);
+        return gridDims.VoxelIdFor(x, y, z);
     }
 
     public void ToConsole(string prefix)
