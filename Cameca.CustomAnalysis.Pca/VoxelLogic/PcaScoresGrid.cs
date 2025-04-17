@@ -539,7 +539,7 @@ public class PcaScoresGrid
         return matches;
     }
 
-    string interfaceIdForCodes(string[] pcaCodes)
+    string interfaceIdForCodes(List<string> pcaCodes)
     {
         List<string> codesList = new List<string>(pcaCodes);
         codesList.Sort();
@@ -725,22 +725,24 @@ public class PcaScoresGrid
             // matchableCodes are the nonZeroPcaCodes that are "one away" from the pcaCode under consideration
 
             HashSet<VoxelID> potentialAdditions = unassignedVoxelBuckets[pcaCode];
+            List<string> matches = new List<string>(); 
             foreach (VoxelID voxelId in potentialAdditions)
             {
                 List<VoxelID> neighbors = voxelId.NeighborVoxels(gridDims);
-                string[] matches = [];
-                for (string matchingCode in matchableCodes)
+                matches.Clear();
+
+                foreach (string matchingCode in matchableCodes)
                 {
                     if (pcaCodeVoxelSets[matchingCode].ContainsAny(neighbors))
                     {
-                        matches += matchingCode;
+                        matches.Add(matchingCode);
                     }
                 }
 
                 // case 1 is no matches 
-                if (matches.Count > 0)
+                if (matches.Count() > 0)
                 {
-                    if (matches.Count == 1)
+                    if (matches.Count() == 1)
                     {
                         voxelSetAdditions[matches[0]].Add(voxelId);
                     }
@@ -773,7 +775,7 @@ public class PcaScoresGrid
         // now, pcaCodeVoxelSets is ready to be used for define a per-voxel component mapping
         // lets order the pcaCodeVoxelSets by population
         List <string> pcaCodesByPopulation = pcaCodeVoxelSets.Keys.ToList();
-        PopulationSorter comparator = new PopulationSorter<string, VoxelID>(pcaCodeVoxelSets);
+        PopulationSorter<string, VoxelID> comparator = new PopulationSorter<string, VoxelID>(pcaCodeVoxelSets);
         pcaCodesByPopulation.Sort(comparator);
 
         // now pcaCodesByPopulation is sorted?
@@ -781,7 +783,7 @@ public class PcaScoresGrid
         // 
         Dictionary<string, int> phaseIndexMap = new Dictionary<string, int>();
         int phaseIndex = 1;
-        for (string pcaCode in  pcaCodesByPopulation)
+        foreach (string pcaCode in  pcaCodesByPopulation)
         {
             phaseIndexMap[pcaCode] = phaseIndex;
             phaseIndex += 1;

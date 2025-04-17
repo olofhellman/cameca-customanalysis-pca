@@ -26,7 +26,7 @@ public class PopulationSorter<T, U> : IComparer<T>
         {
             popY = dict[x].Count();
         }
-        return popX > popY;
+        return (popX > popY) ? -1 : (popY > popX) ? 1 : 0;
     }
  
 }
