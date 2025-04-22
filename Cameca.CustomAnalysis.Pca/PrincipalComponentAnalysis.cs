@@ -19,6 +19,7 @@ using static Cameca.CustomAnalysis.Interface.IonFormula;
 using CommunityToolkit.HighPerformance;
 using System.Windows.Markup;
 using System.Runtime.Intrinsics.Arm;
+using Cameca.Extensions.Controls;
 
 namespace Cameca.CustomAnalysis.Pca;
 
@@ -294,46 +295,46 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         }
         ComponentRenderData = newComponentsData;
 
-
-        var newSelectedGridData = new IRenderData[1];
-        var projectionsDictionary = phaseIdResults.TwoDPeakProjections();
-        var gridRepresentation = Resources.ChartObjects.CreateHistogram2D();
-        gridRepresentation.ColorMap = Resources.ColorMap.GetPresetColorMap(ColorMapPreset.GreyScale);
-        gridRepresentation.Height = 2.0;  // double
-        gridRepresentation.Width = 2.0;  // double
-        var gridIds = projectionsDictionary.Keys.ToList();
-        if (gridIds.Count > 0)
+        var peakProjections = phaseIdResults.TwoDPeakProjections();
+        int gridCount = peakProjections.Count;
+        var newGridProjectionsData = new List<IRenderData>();
+        foreach (KeyValuePair<string, TwoDPeakProjection> kvp in peakProjections)
         {
-            string gridId = gridIds[0];
-            TwoDPeakProjection projection = projectionsDictionary[gridId];
-            DensityPlane dp = projection.densityPlane;
-            (TwoDGridCoord minCoord, TwoDGridCoord maxCoord) = dp.MinMaxGridCoords();
-            int spanX = 1 + maxCoord.x - minCoord.x;
-            int spanY = 1 + maxCoord.y - minCoord.y;
-            int span = Math.Max(spanX, spanY);
-            int numCoords = span * span;
-            float[] dat = new float[numCoords * 4];
-            for (int q = 0; q < spanY;  q += 1)
-            {
-                int qOffset = q * span;
-                int gridq = q + minCoord.y;
-                for (int p = 0; p < spanX; p += 1)
-                {
-                    int arrayIndex = qOffset + p;
-                    int gridp = p + minCoord.x; 
-                    dat[arrayIndex] = dp.valueAtGridCoords(gridp, gridq);
-                }
-
-            }
-            ReadOnlyMemory2D<float> rom = new ReadOnlyMemory2D<float>(dat, span, span);
-            Vector2 binsize = new Vector2(0.5f, 0.5f); // Vector2(dp.binsize, dp.binsize);
-            Vector2 origin = new Vector2(minCoord.x * dp.binsize, minCoord.y * dp.binsize);
-            gridRepresentation.Update(rom, binsize, origin);
+            var histogram = Resources.ChartObjects.CreateHistogram2D();
+            histogram.Name = kvp.Key;
+            histogram.ColorMap = Resources.ColorMap.GetPresetColorMap(ColorMapPreset.GreyScale);
+            FillRenderDataWithGridData(histogram, kvp.Value);
+            newGridProjectionsData.Add(histogram);
         }
-        newSelectedGridData[0] = gridRepresentation;
-        SelectedGridRenderData = newSelectedGridData;
+        SelectedGridRenderData = newGridProjectionsData;
     }
 
+    public void FillRenderDataWithGridData(IHistogram2DRenderData renderData, TwoDPeakProjection projection)
+    {
+        // renderData.ColorMap = Resources.ColorMap.GetPresetColorMap(ColorMapPreset.GreyScale);
+        DensityPlane dp = projection.densityPlane;
+        (TwoDGridCoord minCoord, TwoDGridCoord maxCoord) = dp.MinMaxGridCoords();
+        int spanX = 1 + maxCoord.x - minCoord.x;
+        int spanY = 1 + maxCoord.y - minCoord.y;
+        int span = Math.Max(spanX, spanY);
+        int numCoords = span * span;
+        float[] dat = new float[numCoords * 4];
+        for (int q = 0; q < spanY; q += 1)
+        {
+            int qOffset = q * span;
+            int gridq = q + minCoord.y;
+            for (int p = 0; p < spanX; p += 1)
+            {
+                int arrayIndex = qOffset + p;
+                int gridp = p + minCoord.x;
+                dat[arrayIndex] = dp.valueAtGridCoords(gridp, gridq);
+            }
+        }
+        ReadOnlyMemory2D<float> rom = new ReadOnlyMemory2D<float>(dat, span, span);
+        Vector2 binsize = new Vector2(0.5f, 0.5f); // Vector2(dp.binsize, dp.binsize);
+        Vector2 origin = new Vector2(minCoord.x * dp.binsize, minCoord.y * dp.binsize);
+        renderData.Update(rom, binsize, origin);
+    }
     // Updates readonly Min/Max properties so the bounds are displayed in the Properties panel 
     private void UpdateOptionsBounds()
     {

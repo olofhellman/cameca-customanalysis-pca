@@ -41,9 +41,8 @@
                 <utils:ButtonOverlayControl ButtonCommand="{Binding UpdateComponentsCommand}"
                                ButtonContent="Update"
                                OverlayVisibility="{Binding UpdateComponentsCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <controls:Histogram2D DataSource="{Binding SelectedGridRenderData}"
-                          AxisXLabel="PCA dimension 0"
-                          AxisYLabel="PCA dimension 1"/>
+                    <local:ProjectionGridsView GridsSource="{Binding SelectedGridRenderData}" />
+
                 </utils:ButtonOverlayControl>
             </TabItem>
             

@@ -1,0 +1,32 @@
+﻿<UserControl x:Class="Cameca.CustomAnalysis.Pca.ProjectionGridsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Cameca.CustomAnalysis.Pca"
+             xmlns:interface="clr-namespace:Cameca.CustomAnalysis.Interface;assembly=Cameca.CustomAnalysis.Interface"
+             xmlns:controls="clr-namespace:Cameca.Extensions.Controls;assembly=Cameca.Extensions.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <local:SingleRenderDataValueConverter x:Key="SingleRenderDataValueConverter" />
+    </UserControl.Resources>
+    <Grid>
+        
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <Button x:Name="AdvanceGridButton" Content="Advance To Next Grid" Height="32" Width="140"
+                Click="AdvanceGridButton_Click">
+            </Button>
+        </StackPanel>
+
+        <controls:Histogram2D x:Name="ProjectionGrid2dHistogram" Grid.Row="1" DataSource="{Binding SelectedGridRenderData, RelativeSource={RelativeSource AncestorType=local:ProjectionGridsView}}"
+             AxisXLabel="PCA dimension 0"
+             AxisYLabel="PCA dimension 1"/>
+
+    </Grid>
+</UserControl>
