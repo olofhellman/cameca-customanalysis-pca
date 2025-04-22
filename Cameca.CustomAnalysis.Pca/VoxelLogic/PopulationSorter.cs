@@ -24,7 +24,7 @@ public class PopulationSorter<T, U> : IComparer<T>
         }
         if (y != null && dict.ContainsKey(y))
         {
-            popY = dict[x].Count();
+            popY = dict[y].Count();
         }
         return (popX > popY) ? -1 : (popY > popX) ? 1 : 0;
     }

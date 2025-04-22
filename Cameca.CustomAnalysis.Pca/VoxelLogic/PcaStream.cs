@@ -16,15 +16,22 @@ public class PcaStream
     StreamWriter outputFile;
     DateTime creationTime;
 
-    ("pcaCodeVoxelSets", pcaCodeVoxelSets);
     public void DumpVoxelSetStats(string prefix, Dictionary<string, HashSet<VoxelID>> voxelSets)
     {
         outputFile.WriteLine(prefix);
+        foreach(KeyValuePair<string, HashSet<VoxelID>> kvp in voxelSets)
+        {
+            outputFile.WriteLine(kvp.Key + ": " + kvp.Value.Count());
+        }
+        outputFile.WriteLine("!");
     }
 
-    static string dateAsString(DateTime dt)
-    {
-        return dt.ToString("x", cultures);
+    // for use in filename, can't use : -- replace those with -
+    // Using the format string "s" results in a string like this 2008-06-15T21:15:07
+    static string DateAsString(DateTime dt)
+    { 
+        string s = dt.ToString("s");
+        return s.Replace(":", "-");
     }
 
     public PcaStream(string fileNameStem)
@@ -32,21 +39,22 @@ public class PcaStream
         string docPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         creationTime = DateTime.Now;
         string filename = fileNameStem + "-" + DateAsString(creationTime);
-        outputFile = new StreamWriter(filename);
+        string outputFilename = System.IO.Path.Combine(docPath, filename);
+
+        outputFile = new StreamWriter(outputFilename);
     }
 
-    public WriteTimestamp(string prefix)
+    public void WriteTimestamp(string prefix)
     {
         DateTime dtNow = DateTime.Now;
         TimeSpan diff = dtNow - creationTime;
-        outputFile.WriteLine(prefix + " timestamp " +  diff.ToString);
+        outputFile.WriteLine(prefix + " timestamp " +  diff.ToString());
     }
 
-    public Close()
+    public void Close()
     {
         outputFile.Close();
     }
-
 } 
 
 

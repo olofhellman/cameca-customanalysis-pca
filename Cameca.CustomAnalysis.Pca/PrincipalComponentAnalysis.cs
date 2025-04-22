@@ -16,6 +16,9 @@ using LiveCharts;
 using LiveCharts.Configurations;
 using LiveCharts.Wpf;
 using static Cameca.CustomAnalysis.Interface.IonFormula;
+using CommunityToolkit.HighPerformance;
+using System.Windows.Markup;
+using System.Runtime.Intrinsics.Arm;
 
 namespace Cameca.CustomAnalysis.Pca;
 
@@ -35,6 +38,9 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     private ICollection<IRenderData> componentRenderData = Array.Empty<IRenderData>();
 
     [ObservableProperty]
+    private ICollection<IRenderData> selectedGridRenderData = Array.Empty<IRenderData>();
+
+    [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(UpdateCommand))]
     private EigenvalueResults? eigenvalueResults;
 
@@ -44,26 +50,31 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     private ComponentsResults? componentsResults;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpdateSelectedCopmponentCanExecute))]
+    [NotifyPropertyChangedFor(nameof(UpdateComponentsCanExecute))]
+    [NotifyCanExecuteChangedFor(nameof(UpdateComponentsCommand))]
+    private TwoDPeakProjections? twoDPeakProjections;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateSelectedComponentCanExecute))]
     [NotifyCanExecuteChangedFor(nameof(UpdateSelectedComponentCommand))]
     private SeriesCollection loadingsSeries = new();
 
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpdateSelectedCopmponentCanExecute))]
+    [NotifyPropertyChangedFor(nameof(UpdateSelectedComponentCanExecute))]
     [NotifyCanExecuteChangedFor(nameof(UpdateSelectedComponentCommand))]
-    public ICollection<string> loadingsLables = Array.Empty<string>();
+    public ICollection<string> loadingsLabels = Array.Empty<string>();
 
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpdateSelectedCopmponentCanExecute))]
+    [NotifyPropertyChangedFor(nameof(UpdateSelectedComponentCanExecute))]
     [NotifyCanExecuteChangedFor(nameof(UpdateSelectedComponentCommand))]
     public ICollection<IRenderData> scoresHistogramData = Array.Empty<IRenderData>();
 
     public bool UpdateComponentsCanExecute => ComponentsResults is null;
 
-    public bool UpdateSelectedCopmponentCanExecute =>
-        !LoadingsSeries.Any() || !LoadingsLables.Any() || !ScoresHistogramData.Any();
+    public bool UpdateSelectedComponentCanExecute =>
+        !LoadingsSeries.Any() || !LoadingsLabels.Any() || !ScoresHistogramData.Any();
 
     public Func<double, string> AxisYLabelFormatter { get; } = (double value) => value.ToString("F3");
 
@@ -147,10 +158,10 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     }
 
     // Uses the component data (or computes for all componets if necessary) to generate plots for the selected component by index
-    [RelayCommand(CanExecute = nameof(UpdateSelectedCopmponentCanExecute))]
+    [RelayCommand(CanExecute = nameof(UpdateSelectedComponentCanExecute))]
     public async Task UpdateSelectedComponent(CancellationToken cancellationToken)
     {
-        LoadingsLables = Array.Empty<string>();
+        LoadingsLabels = Array.Empty<string>();
         ScoresHistogramData = Array.Empty<IRenderData>();
 
         if (await Resources.GetIonData(cancellationToken: cancellationToken) is not { } ionData)
@@ -196,7 +207,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
         {
             series
         };
-        LoadingsLables = ions.Select(x => x.Name).ToList();
+        LoadingsLabels = ions.Select(x => x.Name).ToList();
 
         // Scores Histogram
         int voxels = scores.Length;
@@ -251,23 +262,23 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     partial void OnComponentsResultsChanged(ComponentsResults? value)
     {
         ComponentRenderData = Array.Empty<IRenderData>();
+        SelectedGridRenderData = Array.Empty<IRenderData>();
 
-        if (ComponentsResults is not { Grid3DData: { } gridData, 
-                                       Components: { } components,  
-                                       PhaseIDResults: { } phaseIdResults, 
-                                       VoxelIndices: { } voxelIndices }
+        if (ComponentsResults is not { Grid3DData: { } gridData,
+            Components: { } components,
+            PhaseIDResults: { } phaseIdResults,
+            VoxelIndices: { } voxelIndices }
          || Resources.GetValidIonData() is not { } ionData)
         {
             return;
         }
 
-        int numComponents = Properties.Components;
-        int selectedIndex = Properties.ComponentIndex;
+        int numComponents = 6; // was hardwired to numComponents  Properties.Components;
+        // int selectedIndex = Properties.ComponentIndex;
 
         var newComponentsData = new IRenderData[numComponents];
         for (int compIndex = 0; compIndex < numComponents; compIndex++)
         {
-            var scores = components[compIndex].Scores;
             var phaseIdScores = GetPhaseIdScoresForVoxelIndices(phaseIdResults, compIndex, voxelIndices);
 
             // data fed into GetScoredPositions is an array of voxelIndices for which a dot should be generated,
@@ -282,6 +293,45 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
             newComponentsData[compIndex] = valuePoints;
         }
         ComponentRenderData = newComponentsData;
+
+
+        var newSelectedGridData = new IRenderData[1];
+        var projectionsDictionary = phaseIdResults.TwoDPeakProjections();
+        var gridRepresentation = Resources.ChartObjects.CreateHistogram2D();
+        gridRepresentation.ColorMap = Resources.ColorMap.GetPresetColorMap(ColorMapPreset.GreyScale);
+        gridRepresentation.Height = 2.0;  // double
+        gridRepresentation.Width = 2.0;  // double
+        var gridIds = projectionsDictionary.Keys.ToList();
+        if (gridIds.Count > 0)
+        {
+            string gridId = gridIds[0];
+            TwoDPeakProjection projection = projectionsDictionary[gridId];
+            DensityPlane dp = projection.densityPlane;
+            (TwoDGridCoord minCoord, TwoDGridCoord maxCoord) = dp.MinMaxGridCoords();
+            int spanX = 1 + maxCoord.x - minCoord.x;
+            int spanY = 1 + maxCoord.y - minCoord.y;
+            int span = Math.Max(spanX, spanY);
+            int numCoords = span * span;
+            float[] dat = new float[numCoords * 4];
+            for (int q = 0; q < spanY;  q += 1)
+            {
+                int qOffset = q * span;
+                int gridq = q + minCoord.y;
+                for (int p = 0; p < spanX; p += 1)
+                {
+                    int arrayIndex = qOffset + p;
+                    int gridp = p + minCoord.x; 
+                    dat[arrayIndex] = dp.valueAtGridCoords(gridp, gridq);
+                }
+
+            }
+            ReadOnlyMemory2D<float> rom = new ReadOnlyMemory2D<float>(dat, span, span);
+            Vector2 binsize = new Vector2(0.5f, 0.5f); // Vector2(dp.binsize, dp.binsize);
+            Vector2 origin = new Vector2(minCoord.x * dp.binsize, minCoord.y * dp.binsize);
+            gridRepresentation.Update(rom, binsize, origin);
+        }
+        newSelectedGridData[0] = gridRepresentation;
+        SelectedGridRenderData = newSelectedGridData;
     }
 
     // Updates readonly Min/Max properties so the bounds are displayed in the Properties panel 
@@ -431,7 +481,7 @@ internal partial class PrincipalComponentAnalysis : BasicCustomAnalysisBase<PcaP
     private void InvalidateSelectedComponent()
     {
         LoadingsSeries = new SeriesCollection();
-        LoadingsLables = Array.Empty<string>();
+        LoadingsLabels = Array.Empty<string>();
         ScoresHistogramData = Array.Empty<IRenderData>();
     }
 

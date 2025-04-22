@@ -10,6 +10,8 @@ using System.Windows.Input;
 using System.Text;
 using System.Windows.Media.Animation;
 using System.Reflection.PortableExecutable;
+using Cameca.CustomAnalysis.Pca;
+using System.Runtime.Intrinsics.Arm;
 
 
 // PcaScoresGrid represents a three dimensional grid containing the PCA scores for a collection of voxels
@@ -551,6 +553,7 @@ public class PcaScoresGrid
         }
         return interfaceId;
     }
+
     void addVoxelsToHashSetDictionary(Dictionary<string, HashSet<VoxelID>> additions, Dictionary<string, HashSet<VoxelID>> sets)
     {
         foreach (KeyValuePair<string, HashSet<VoxelID>> kvp in additions)
@@ -567,6 +570,28 @@ public class PcaScoresGrid
             foreach (VoxelID voxelId in kvp.Value)
             {
                 hashSet.Add(voxelId);
+            }
+            sets[kvp.Key] = hashSet;
+        }
+    }
+
+    
+    void subtractVoxelsFromHashSetDictionary(Dictionary<string, HashSet<VoxelID>> subtractions, Dictionary<string, HashSet<VoxelID>> sets)
+    {
+        foreach (KeyValuePair<string, HashSet<VoxelID>> kvp in subtractions)
+        {
+            HashSet<VoxelID> hashSet;
+            if (sets.ContainsKey(kvp.Key))
+            {
+                hashSet = sets[kvp.Key];
+            }
+            else
+            {
+                hashSet = new HashSet<VoxelID>();
+            }
+            foreach (VoxelID voxelId in kvp.Value)
+            {
+                hashSet.Remove(voxelId);
             }
             sets[kvp.Key] = hashSet;
         }
@@ -667,6 +692,10 @@ public class PcaScoresGrid
                         pcaCodes[voxelId] = pcaCodes[voxelId] + unassignedPcaCode;
                     }
                 }
+
+                var projection = new TwoDPeakProjection(twoDGrid);
+                phaseIdResults.SetTwoDPeakProjectionFor(gridId, projection);
+
                 gridIndex += 1;
             }
         }
@@ -691,7 +720,7 @@ public class PcaScoresGrid
         {
             // just copy over the voxel List to be the base list for  that phase
             pcaCodeVoxelSets[pcaCode] = unassignedVoxelBuckets[pcaCode];
-            unassignedVoxelBuckets[pcaCode] = null;
+            unassignedVoxelBuckets.Remove(pcaCode); 
         }
 
         // now pcaCodeVoxelSets is filled with data for each pcaCode,
@@ -708,6 +737,7 @@ public class PcaScoresGrid
         // for case 2) add the voxels to the core regions
         // for case 3) designate the voxel as an interface voxel
 
+        Dictionary<string, HashSet<VoxelID>> unassignedSubtractions = new Dictionary<string, HashSet<VoxelID>>();
         Dictionary<string, HashSet<VoxelID>> voxelSetAdditions = new Dictionary<string, HashSet<VoxelID>>();
         Dictionary<string, HashSet<VoxelID>> interfaceVoxelSets = new Dictionary<string, HashSet<VoxelID>>();
         Dictionary<string, HashSet<VoxelID>> interfaceVoxelSetAdditions = new Dictionary<string, HashSet<VoxelID>>();
@@ -724,7 +754,8 @@ public class PcaScoresGrid
             HashSet<string> matchableCodes = filterForMatchableCode(nonZeroPcaCodes, pcaCode);
             // matchableCodes are the nonZeroPcaCodes that are "one away" from the pcaCode under consideration
 
-            HashSet<VoxelID> potentialAdditions = unassignedVoxelBuckets[pcaCode];
+            HashSet<VoxelID> potentialAdditions = unassignedVoxelBuckets[pcaCode]; 
+            HashSet<VoxelID> subtractions = new HashSet<VoxelID>();
             List<string> matches = new List<string>(); 
             foreach (VoxelID voxelId in potentialAdditions)
             {
@@ -745,36 +776,44 @@ public class PcaScoresGrid
                     if (matches.Count() == 1)
                     {
                         voxelSetAdditions[matches[0]].Add(voxelId);
+                        subtractions.Add(voxelId);
                     }
                     else
                     {
                         string interfaceId = interfaceIdForCodes(matches);
-                        if (interfaceVoxelSets.ContainsKey(interfaceId))
+                        if (interfaceVoxelSetAdditions.ContainsKey(interfaceId))
                         {
-                            interfaceVoxelSets[interfaceId].Add(voxelId);
+                            interfaceVoxelSetAdditions[interfaceId].Add(voxelId);
                         }
                         else
                         {
                             HashSet<VoxelID> newSet = new HashSet<VoxelID>();
                             newSet.Add(voxelId);
-                            interfaceVoxelSets[interfaceId] = newSet;
+                            interfaceVoxelSetAdditions[interfaceId] = newSet;
                         }
+                        subtractions.Add(voxelId);
                     }
                 }
             }
+            unassignedSubtractions[pcaCode] = subtractions;
         }
         // now, any voxel that is part of interfaceVoxelSetAdditions
         // or voxelSetAdditions should get taken out of unassignedVoxelBuckets
         // and added to interfaceVoxelSets or pcaCodeVoxelSets
-        pcaStream.DumpVoxelSetStats("pcaCodeVoxelSets", pcaCodeVoxelSets);
+        pcaStream.DumpVoxelSetStats("start pcaCodeVoxelSets", pcaCodeVoxelSets);
+        pcaStream.DumpVoxelSetStats("startUnassigned", unassignedVoxelBuckets);
         pcaStream.DumpVoxelSetStats("voxelSetAdditions", voxelSetAdditions);
         pcaStream.DumpVoxelSetStats("interfaceVoxelSetAdditions", interfaceVoxelSetAdditions);
         addVoxelsToHashSetDictionary(interfaceVoxelSetAdditions, interfaceVoxelSets);
         addVoxelsToHashSetDictionary(voxelSetAdditions, pcaCodeVoxelSets);
+        subtractVoxelsFromHashSetDictionary(unassignedSubtractions, unassignedVoxelBuckets);
+        pcaStream.DumpVoxelSetStats("assignments sources", unassignedSubtractions);
+        pcaStream.DumpVoxelSetStats("new pcaCodeVoxelSets", pcaCodeVoxelSets);
+        pcaStream.DumpVoxelSetStats("stillUnassigned", unassignedVoxelBuckets);
 
         // now, pcaCodeVoxelSets is ready to be used for define a per-voxel component mapping
         // lets order the pcaCodeVoxelSets by population
-        List <string> pcaCodesByPopulation = pcaCodeVoxelSets.Keys.ToList();
+        List<string> pcaCodesByPopulation = pcaCodeVoxelSets.Keys.ToList();
         PopulationSorter<string, VoxelID> comparator = new PopulationSorter<string, VoxelID>(pcaCodeVoxelSets);
         pcaCodesByPopulation.Sort(comparator);
 
@@ -790,27 +829,37 @@ public class PcaScoresGrid
         }
 
         // and, call IdentifyVoxelAs for each voxel
-        // now, all the remaining entries in voxelLists are unassigned :  
-        // assign these to component 0
+        // phaseResults initializes phase ID to zero for each voxel
+        // So, we only need to assign voxels that have landed in the pcaCodeVoxelSets
         foreach (VoxelID voxelId in voxelIds)
         {
-            string pcaCode = pcaCodes[voxelId];
-            int voxelphase = phaseIndexMap[pcaCode];
-            if (voxelphase > 4 )
+            phaseIdResults.IdentifyVoxelAs(voxelId, 0);
+        }
+            foreach (KeyValuePair<string, HashSet<VoxelID>> kvp in pcaCodeVoxelSets)
             {
-                voxelphase = 5;
-            }
- 
-           phaseIdResults.IdentifyVoxelAs(voxelId, voxelphase);
+            string nthPcaCode = kvp.Key;
+            
+            if (phaseIndexMap.ContainsKey(nthPcaCode))
+            {
+                int voxelphase = phaseIndexMap[nthPcaCode];
+                if (voxelphase > 4)
+                {
+                    voxelphase = 6;
+                }
+                foreach(VoxelID voxelId in kvp.Value)
+                {
+                    phaseIdResults.IdentifyVoxelAs(voxelId, voxelphase);
+                }
+            }   
         }
 
-        // for exery interface voxel, set it to type 0:
+        // for exery interface voxel, set it to type 5:
         //  Dictionary<string, HashSet<VoxelID>> interfaceVoxelSets = new Dictionary<string, HashSet<VoxelID>>();
         foreach (KeyValuePair<string, HashSet<VoxelID>> kvp in interfaceVoxelSets)
         {
             foreach (VoxelID voxelId in kvp.Value)
             {
-                phaseIdResults.IdentifyVoxelAs(voxelId, 0);
+                phaseIdResults.IdentifyVoxelAs(voxelId, 5);
             }
         }
 

@@ -5,6 +5,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.Arm;
+using System.Windows.Controls;
+using System.Text.RegularExpressions;
 
 
 public struct PixelID : IComparable<PixelID>
@@ -87,7 +90,7 @@ public struct PeakID
 public class DensityPlane
 {
     float halfBinsize;
-    float binsize;
+   public float binsize;
     float oneOverBinsize;
     int oobPoints;
     float maxval;
@@ -291,7 +294,13 @@ public class DensityPlane
             this.WriteToStream(outputFile);
         }
     }
-    
+
+    public float valueAtGridCoords(int x, int y)
+    {
+        PixelID pixelId = this.BinFor(x, y);
+        return this.valueAtPixel(pixelId);
+    }
+
     public float valueAtPixel(PixelID pixelId)
     {
         float binValue;
@@ -301,8 +310,8 @@ public class DensityPlane
         }
         return 0.0f;
     }
-    
-    PixelID BinFor(int x, int y)
+
+    public PixelID BinFor(int x, int y)
     {
         return new PixelID(y * 1024 + x);
     }

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using Cameca.CustomAnalysis.Pca;
 
 
 // PhaseIDResults represents an assignment of each voxel to an integer phase.
@@ -8,7 +9,8 @@ using System;
 // or 0 if no phase is identified
 public class PhaseIdResults
 {
-    Dictionary<VoxelID, int> identifiedPhase; 
+    Dictionary<VoxelID, int> identifiedPhase;
+    Dictionary<string, TwoDPeakProjection> twoDPeakProjections;
 
     public PhaseIdResults(List<VoxelID> voxelIds)
     {
@@ -18,12 +20,22 @@ public class PhaseIdResults
         {
             identifiedPhase[voxelIds[i]] = 0;
         }
+        twoDPeakProjections = new Dictionary<string, TwoDPeakProjection>();
+    }
+
+    public void SetTwoDPeakProjectionFor(string key, TwoDPeakProjection projection)
+    {
+        twoDPeakProjections[key] = projection;
+    }
+    public Dictionary<string, TwoDPeakProjection> TwoDPeakProjections()
+    {
+        return twoDPeakProjections;
     }
 
     public void IdentifyVoxelAs(VoxelID voxelId, int phase)
     {
         identifiedPhase[voxelId] = phase;
-    }    
+    }
     public void IdentifyVoxelsAs(List<VoxelID> voxelIds, int phase)
     {
         foreach (VoxelID voxelId in voxelIds) {

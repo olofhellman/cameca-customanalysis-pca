@@ -24,7 +24,7 @@ public struct VoxelID : IComparable<VoxelID>
 
     public VoxelID(ThreeDGridDimensions dims, int x, int y, int z)
     {
-        this.intValue = 0;
+        this.intValue = dims.VoxelIdIntValueFor(x, y, z);
     }
 
     static VoxelID? VoxelIDIfPossible(ThreeDGridDimensions dims, int x, int y, int z)
