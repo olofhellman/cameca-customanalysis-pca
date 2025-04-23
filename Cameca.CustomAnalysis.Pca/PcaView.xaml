@@ -100,11 +100,20 @@
                     </Grid>
                 </utils:ButtonOverlayControl>
             </TabItem>
+
+            <TabItem Header="Grids">
+                <utils:ButtonOverlayControl ButtonCommand="{Binding UpdateComponentsCommand}"
+                               ButtonContent="Update"
+                               OverlayVisibility="{Binding UpdateComponentsCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <local:ProjectionGridsView GridsSource="{Binding SelectedGridRenderData}" />
+
+                </utils:ButtonOverlayControl>
+            </TabItem>
             
             <TabItem Header="Loading">
                 <utils:ButtonOverlayControl ButtonCommand="{Binding UpdateSelectedComponentCommand}"
                                 ButtonContent="Update"
-                                OverlayVisibility="{Binding UpdateSelectedCopmponentCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                OverlayVisibility="{Binding UpdateSelectedComponentCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <lvc:CartesianChart Series="{Binding LoadingsSeries}"
                                         DisableAnimations="True"
                                         LegendLocation="None">
@@ -114,7 +123,7 @@
                             </Style>
                         </lvc:CartesianChart.Resources>
                         <lvc:CartesianChart.AxisX>
-                            <lvc:Axis Labels="{Binding LoadingsLables}" FontSize="18">
+                            <lvc:Axis Labels="{Binding LoadingsLabels}" FontSize="18">
                                 <lvc:Axis.Separator>
                                     <lvc:Separator Step="1" />
                                 </lvc:Axis.Separator>
@@ -130,7 +139,7 @@
             <TabItem Header="Scores">
                 <utils:ButtonOverlayControl ButtonCommand="{Binding UpdateSelectedComponentCommand}"
                             ButtonContent="Update"
-                            OverlayVisibility="{Binding UpdateSelectedCopmponentCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            OverlayVisibility="{Binding UpdateSelectedComponentCanExecute, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <controls:Chart2D DataSource="{Binding ScoresHistogramData}"
                                   AxisXLabel="Score"
                                   AxisYLabel="Voxels"/>

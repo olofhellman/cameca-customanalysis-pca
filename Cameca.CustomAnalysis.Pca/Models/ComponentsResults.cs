@@ -21,10 +21,8 @@ public sealed class ComponentsResults
         VoxelIndices = voxelIndices;
         Components = components;
 
-        List<int> emptyList = new List<int>();
-        emptyList.Add(0);
-        emptyList[0] = 0;
-        PhaseIDResults = new PhaseIdResults(emptyList, 1);
+        List<VoxelID> emptyList = new List<VoxelID>();
+        PhaseIDResults = new PhaseIdResults(emptyList);
     }
 
 }

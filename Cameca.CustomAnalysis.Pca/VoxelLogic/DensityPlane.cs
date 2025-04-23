@@ -1,11 +1,14 @@
 
 using System;
 using System.IO;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using static System.Formats.Asn1.AsnWriter;
+using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.Arm;
+using System.Windows.Controls;
+using System.Text.RegularExpressions;
+
 
 public struct PixelID : IComparable<PixelID>
 {
@@ -87,7 +90,7 @@ public struct PeakID
 public class DensityPlane
 {
     float halfBinsize;
-    float binsize;
+   public float binsize;
     float oneOverBinsize;
     int oobPoints;
     float maxval;
@@ -107,33 +110,32 @@ public class DensityPlane
     {
         return data.Keys.ToList();
     }
-    
+
+    internal void AddIfPossible(int x, int y, List<PixelID> list)
+    {
+        PixelID possibleBin = new PixelID(x, y);
+        if (data.ContainsKey(possibleBin))
+        {
+            list.Add(possibleBin);
+        }
+    }
+
+    // check for the 8 neighboring pixels and add them if they have a non-zero value
     public List<PixelID> PixelIdsNeighboring(PixelID pixelId)
     {
-        int x;
-        int y;
-        (x, y) = pixelId.xyCoords();
+        //int x;
+        //int y;
+        (int x, int y) = pixelId.xyCoords();
         List<PixelID> neighbors = new List<PixelID>();
-        PixelID neighborBin = new PixelID(x - 1, y);
-        if (data.ContainsKey(neighborBin))
-        {
-            neighbors.Add(neighborBin);
-        }
-		neighborBin = new PixelID(x + 1, y);
-		if (data.ContainsKey(neighborBin))
-		{
-			neighbors.Add(neighborBin);
-		}
-		neighborBin = new PixelID(x, y - 1);
-		if (data.ContainsKey(neighborBin))
-		{
-			neighbors.Add(neighborBin);
-		}
-		neighborBin = new PixelID(x, y + 1);
-		if (data.ContainsKey(neighborBin))
-		{
-			neighbors.Add(neighborBin);
-		}
+        AddIfPossible(x - 1, y - 1, neighbors);
+        AddIfPossible(x - 1, y, neighbors);
+        AddIfPossible(x - 1, y + 1, neighbors);
+        AddIfPossible(x, y-1, neighbors);
+        AddIfPossible(x, y+1, neighbors);
+        AddIfPossible(x + 1, y-1, neighbors);
+        AddIfPossible(x + 1, y, neighbors);
+        AddIfPossible(x + 1, y + 1, neighbors);
+
 		return neighbors;
 	}
 	
@@ -292,7 +294,13 @@ public class DensityPlane
             this.WriteToStream(outputFile);
         }
     }
-    
+
+    public float valueAtGridCoords(int x, int y)
+    {
+        PixelID pixelId = this.BinFor(x, y);
+        return this.valueAtPixel(pixelId);
+    }
+
     public float valueAtPixel(PixelID pixelId)
     {
         float binValue;
@@ -302,8 +310,8 @@ public class DensityPlane
         }
         return 0.0f;
     }
-    
-    PixelID BinFor(int x, int y)
+
+    public PixelID BinFor(int x, int y)
     {
         return new PixelID(y * 1024 + x);
     }

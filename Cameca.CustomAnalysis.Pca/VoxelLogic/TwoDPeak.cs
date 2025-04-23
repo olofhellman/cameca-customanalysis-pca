@@ -92,6 +92,8 @@ public class TwoDPeak
     DensityPlane referenceGrid;
     List<PixelID> foundIncreaseIds; // list of pixelIds at edge which increase relative to neighbor
     TwoDGridPartitionFinder partitionFinder; // will supply available neighbors
+    float peakValue;
+    float peakAgglomerationFraction;  // the value above which to ignore 'second peak'
 
     public TwoDPeak(TwoDGridPartitionFinder partitionFinder, DensityPlane grid, PixelID peakMaxPixelId)
     {
@@ -104,9 +106,11 @@ public class TwoDPeak
         this.topCandidates = new List<PixelSuggestion>();
         this.referenceGrid = grid;
         this.foundIncreaseIds = new List<PixelID>();
+        this.peakAgglomerationFraction = 0.8f; // hard code this value
 
-        float firstSuggestionScore = grid.valueAtPixel(peakMaxPixelId);
-        PixelSuggestion firstSuggestion = new PixelSuggestion(peakId, peakMaxPixelId, firstSuggestionScore);
+        this.peakValue = grid.valueAtPixel(peakMaxPixelId);
+        PixelSuggestion firstSuggestion = new PixelSuggestion(peakId, peakMaxPixelId, this.peakValue);
+
         nextCandidates.Add(firstSuggestion);
     }
 
@@ -143,7 +147,8 @@ public class TwoDPeak
             {
                 float neighborScore = referenceGrid.valueAtPixel(availableId);
 
-                if (neighborScore > suggestion.score)
+                // for now, hard code 
+                if ((neighborScore > suggestion.score) && (suggestion.score < this.peakValue * this.peakAgglomerationFraction))
                 {
                     // neighbor has higher score -- shouldn't add to current peak
                     // the currently 'accepted suggestion' is actually a pixel between peaks.

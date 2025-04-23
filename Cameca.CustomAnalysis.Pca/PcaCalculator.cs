@@ -20,24 +20,27 @@ public class PcaScoresGridProducer: IScoresProvider {
         nComponents = compResults.Components.Count;
     }
 
-    public float[] GetScores(int voxelIndex)
+    public (VoxelID, float[]) GetIDAndScores(int voxelIndex)
     {
         float[] scores = new float[nComponents];
         for (int i = 0; i < nComponents; i++)
         {
             scores[i] = compResults.Components[i].Scores[voxelIndex];
         }
-        return scores;
+        VoxelID voxelId = new VoxelID(compResults.VoxelIndices[voxelIndex]);
+        return (voxelId, scores);
     }
 
     public PcaScoresGrid ScoresGrid()
     {
-
-        int nAllVoxels = compResults.Grid3DData.NumVoxels[0] * compResults.Grid3DData.NumVoxels[1] * compResults.Grid3DData.NumVoxels[2];
         int nComponents = compResults.Components.Count;
-        List<int> voxelIndices = new List<int>(compResults.VoxelIndices);
 
-        return new PcaScoresGrid(this, voxelIndices, nComponents, compResults.Grid3DData.NumVoxels);
+        int x = compResults.Grid3DData.NumVoxels[0];
+        int y = compResults.Grid3DData.NumVoxels[1];
+        int z = compResults.Grid3DData.NumVoxels[2];
+
+        ThreeDGridDimensions gridDimensions = new ThreeDGridDimensions(x, y, z);
+        return new PcaScoresGrid(this, compResults.VoxelIndices.Count(), nComponents, gridDimensions);
     }
 }
 
