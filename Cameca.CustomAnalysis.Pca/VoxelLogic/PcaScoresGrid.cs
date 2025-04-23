@@ -644,7 +644,7 @@ public class PcaScoresGrid
             for (int j = i + 1; j < numDimsToInclude; ++j)
             {
                 string gridLetter = CharValueForASCII(AAsciiValue + gridIndex).ToString();
-                string gridId = gridLetter + i.ToString() + j.ToString();
+                string gridId = gridLetter + i.ToString() + "-" + j.ToString();
 
                 // this makes the 2D grid  --  step A) above
                 var twoDGrid = CalculateTwoDDensity(voxelIds, i, j, binSeparation);

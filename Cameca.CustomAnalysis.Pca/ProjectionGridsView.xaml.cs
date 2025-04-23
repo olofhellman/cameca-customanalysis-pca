@@ -50,6 +50,27 @@ public partial class ProjectionGridsView : UserControl
         RefreshGridData();
     }
 
+    internal string AxisYLabelForGridID(string gridID)
+    {
+        string[] components = gridID.Split("-");
+        if (components.Count() != 2)
+        {
+            return "Unknown Pca Axis";
+        }
+        string component = components[0];
+        return "PCA Component " + component.Substring(1);
+    }
+    internal string AxisXLabelForGridID(string gridID)
+    {
+        string[] components = gridID.Split("-");
+        if (components.Count() != 2)
+        {
+            return "Unknown Pca Axis";
+        }
+        string component = components[1];
+        return "PCA Component " + component;
+    }
+
     private void RefreshGridData()
     { 
         ICollection<IRenderData> renderDataCollection = this.GridsSource;
@@ -65,6 +86,8 @@ public partial class ProjectionGridsView : UserControl
             var renderData = renderList[whichGrid];
             List<IRenderData> singleList = new List<IRenderData> { renderData };
             Histogram2D histogram = ProjectionGrid2dHistogram;
+            histogram.AxisXLabel = AxisXLabelForGridID(renderData.Name);
+            histogram.AxisYLabel = AxisYLabelForGridID(renderData.Name);
             histogram.DataSource = singleList;
         }
     }

@@ -25,8 +25,8 @@
         </StackPanel>
 
         <controls:Histogram2D x:Name="ProjectionGrid2dHistogram" Grid.Row="1" DataSource="{Binding SelectedGridRenderData, RelativeSource={RelativeSource AncestorType=local:ProjectionGridsView}}"
-             AxisXLabel="PCA dimension 0"
-             AxisYLabel="PCA dimension 1"/>
+             AxisXLabel="PCA dimension 1"
+             AxisYLabel="PCA dimension 0"/>
 
     </Grid>
 </UserControl>
